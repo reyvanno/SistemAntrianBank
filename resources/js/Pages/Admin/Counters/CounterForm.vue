@@ -17,7 +17,7 @@ const props = defineProps({
         default: () => [],
     },
 
-    submitRoute: String, 
+    submitRoute: String,
     submitMethod: String,
 });
 

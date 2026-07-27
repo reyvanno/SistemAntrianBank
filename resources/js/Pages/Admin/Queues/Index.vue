@@ -61,6 +61,7 @@ const badge = (status) => {
             return "bg-red-100 text-red-700";
     }
 };
+
 </script>
 
 <template>
