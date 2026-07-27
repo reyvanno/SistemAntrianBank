@@ -4,6 +4,9 @@ import { Head, Link, router, usePage } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
 import { confirmDelete } from "@/lib/swal";
 import SearchBox from "@/Components/Shared/SearchBox.vue";
+import DataTable from "@/Components/Shared/DataTable.vue";
+import Pagination from "@/Components/Shared/Pagination.vue";
+import DangerButton from "@/Components/DangerButton.vue";
 
 const props = defineProps({
     counters: Object,
@@ -62,22 +65,7 @@ const destroy = async (id) => {
             placeholder="Cari Counter..."
         />
 
-        <table class="w-full bg-white rounded-xl overflow-hidden">
-            <thead>
-                <tr class="border-b">
-                    <th class="p-4">Kode</th>
-
-                    <th>Nama</th>
-
-                    <th>Layanan</th>
-
-                    <th>Status</th>
-
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-
-            <tbody>
+        <DataTable :headers="['Kode', 'Nama', 'Layanan', 'Status', 'Aksi']">
                 <tr
                     v-for="counter in counters.data"
                     :key="counter.id"
@@ -117,32 +105,16 @@ const destroy = async (id) => {
                                 Edit
                             </Link>
 
-                            <button
+                            <DangerButton
                                 @click="destroy(counter.id)"
-                                class="bg-red-500 text-white px-4 py-2 rounded"
                             >
                                 Hapus
-                            </button>
+                            </DangerButton>
                         </div>
                     </td>
                 </tr>
-            </tbody>
-        </table>
+        </DataTable>
 
-        <div class="flex gap-2 mt-6">
-            <Link
-                v-for="link in counters.links"
-                :key="link.label"
-                :href="link.url ?? ''"
-                v-html="link.label"
-                class="border px-4 py-2 rounded"
-                :class="{
-                    'bg-indigo-600 text-white': link.active,
-
-                    'pointer-events-none opacity-50': !link.url,
-                }"
-            >
-            </Link>
-        </div>
+        <Pagination :links="counters.links" />
     </AdminLayout>
 </template>

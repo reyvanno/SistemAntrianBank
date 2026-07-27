@@ -4,6 +4,9 @@ import { Head, Link, router, usePage } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
 import { confirmDelete } from "@/lib/swal";
 import SearchBox from "@/Components/Shared/SearchBox.vue";
+import DataTable from "@/Components/Shared/DataTable.vue";
+import Pagination from "@/Components/Shared/Pagination.vue";
+import DangerButton from "@/Components/DangerButton.vue";
 
 const props = defineProps({
     users: Object,
@@ -62,18 +65,7 @@ const destroy = async (id) => {
             placeholder="Cari user..."
         />
         
-        <table class="w-full bg-white rounded-xl overflow-hidden shadow">
-            <thead class="bg-slate-100">
-                <tr class="border-b">
-                    <th class="p-4">Nama</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th width="180">Aksi</th>
-                </tr>
-            </thead>
-
-            <tbody>
+        <DataTable :headers="['Nama', 'Email', 'Role', 'Status', 'Aksi']">
                 <tr
                     v-for="user in users.data"
                     :key="user.id"
@@ -116,12 +108,11 @@ const destroy = async (id) => {
                                 Edit
                             </Link>
 
-                            <button
+                            <DangerButton
                                 @click="destroy(user.id)"
-                                class="bg-red-600 text-white px-4 py-2 rounded"
                             >
                                 Hapus
-                            </button>
+                            </DangerButton>
                         </div>
                     </td>
                 </tr>
@@ -131,21 +122,8 @@ const destroy = async (id) => {
                         Tidak ada data user.
                     </td>
                 </tr>
-            </tbody>
-        </table>
+        </DataTable>
 
-        <div class="flex gap-2 mt-6">
-            <Link
-                v-for="link in users.links"
-                :key="link.label"
-                :href="link.url ?? ''"
-                v-html="link.label"
-                class="border px-4 py-2 rounded"
-                :class="{
-                    'bg-indigo-600 text-white': link.active,
-                    'pointer-events-none opacity-50': !link.url,
-                }"
-            />
-        </div>
+        <Pagination :links="users.links" />
     </AdminLayout>
 </template>

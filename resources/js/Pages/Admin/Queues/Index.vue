@@ -4,6 +4,8 @@ import { Head, Link, router, useForm, usePage } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
 import { success } from "@/lib/swal";
 import SearchBox from "@/Components/Shared/SearchBox.vue";
+import DataTable from "@/Components/Shared/DataTable.vue";
+import Pagination from "@/Components/Shared/Pagination.vue";
 
 const props = defineProps({
     queues: Object,
@@ -105,67 +107,39 @@ const badge = (status) => {
             placeholder="Cari nomor..."
         />
 
-        <table class="w-full bg-white rounded-xl overflow-hidden shadow">
-            <thead class="bg-slate-100">
-                <tr>
-                    <th class="p-4">Nomor</th>
+        <DataTable :headers="['Nomor', 'Layanan', 'Loket', 'Status', 'Petugas']">
+            <tr
+                v-for="queue in queues.data"
+                :key="queue.id"
+                class="border-b text-center"
+            >
+                <td class="p-4 font-bold">
+                    {{ queue.queue_number }}
+                </td>
 
-                    <th>Layanan</th>
+                <td>
+                    {{ queue.service.name }}
+                </td>
 
-                    <th>Loket</th>
+                <td>
+                    {{ queue.counter?.code ?? "-" }}
+                </td>
 
-                    <th>Status</th>
+                <td>
+                    <span
+                        :class="badge(queue.status)"
+                        class="px-3 py-1 rounded-full text-sm font-semibold"
+                    >
+                        {{ queue.status }}
+                    </span>
+                </td>
 
-                    <th>Petugas</th>
-                </tr>
-            </thead>
+                <td>
+                    {{ queue.handled_by?.name ?? "-" }}
+                </td>
+            </tr>
+        </DataTable>
 
-            <tbody>
-                <tr
-                    v-for="queue in queues.data"
-                    :key="queue.id"
-                    class="border-b text-center"
-                >
-                    <td class="p-4 font-bold">
-                        {{ queue.queue_number }}
-                    </td>
-
-                    <td>
-                        {{ queue.service.name }}
-                    </td>
-
-                    <td>
-                        {{ queue.counter?.code ?? "-" }}
-                    </td>
-
-                    <td>
-                        <span
-                            :class="badge(queue.status)"
-                            class="px-3 py-1 rounded-full text-sm font-semibold"
-                        >
-                            {{ queue.status }}
-                        </span>
-                    </td>
-
-                    <td>
-                        {{ queue.handled_by?.name ?? "-" }}
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-
-        <div class="flex gap-2 mt-6">
-            <Link
-                v-for="link in queues.links"
-                :key="link.label"
-                :href="link.url ?? ''"
-                v-html="link.label"
-                class="border px-4 py-2 rounded"
-                :class="{
-                    'bg-indigo-600 text-white': link.active,
-                    'pointer-events-none opacity-50': !link.url,
-                }"
-            />
-        </div>
+        <Pagination :links="queues.links" />
     </AdminLayout>
 </template>

@@ -6,6 +6,8 @@ import { usePage } from "@inertiajs/vue3";
 import { confirmDelete } from "@/lib/swal";
 import SearchBox from "@/Components/Shared/SearchBox.vue";
 import DataTable from "@/Components/Shared/DataTable.vue";
+import Pagination from "@/Components/Shared/Pagination.vue";
+import DangerButton from "@/Components/DangerButton.vue";
 
 const props = defineProps({
     services: Object,
@@ -81,31 +83,16 @@ const page = usePage();
                             Edit
                         </Link>
 
-                        <button
+                        <DangerButton   
                             @click="destroy(service.id)"
-                            class="bg-red-500 text-white px-4 py-2 rounded"
                         >
                             Hapus
-                        </button>
+                        </DangerButton>
                     </div>
                 </td>
             </tr>
         </DataTable>
         
-        <div class="flex gap-2 mt-6">
-            <Link
-                v-for="link in services.links"
-                :key="link.label"
-                :href="link.url ?? ''"
-                v-html="link.label"
-                class="border px-4 py-2 rounded"
-                :class="{
-                    'bg-indigo-600 text-white': link.active,
-
-                    'pointer-events-none opacity-50': !link.url,
-                }"
-            >
-            </Link>
-        </div>
+        <Pagination :links="services.links" />
     </AdminLayout>
 </template>

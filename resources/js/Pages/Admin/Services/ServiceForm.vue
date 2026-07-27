@@ -1,5 +1,6 @@
 <script setup>
 import { useForm } from "@inertiajs/vue3";
+import PrimaryButton from "@/Components/PrimaryButton.vue";
 
 const props = defineProps({
     service: {
@@ -62,8 +63,8 @@ const submit = () => {
             </p>
         </div>
 
-        <button class="bg-indigo-600 text-white px-6 py-3 rounded-lg">
+        <PrimaryButton type="submit" class="w-full">
             Simpan
-        </button>
+        </PrimaryButton>
     </form>
 </template>

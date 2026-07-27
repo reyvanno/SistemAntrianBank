@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from "@/Layouts/AdminLayout.vue";
+import StatCard from "@/Components/Dashboard/StatCard.vue";
 import { Head } from "@inertiajs/vue3";
 
 defineProps({
@@ -33,48 +34,40 @@ const badgeClass = (status) => {
     <Head title="Dashboard" />
 
     <AdminLayout>
-        <div class="grid grid-cols-4 gap-6 mb-8">
-            <div class="bg-white rounded-3xl shadow p-6">
-                <p class="text-gray-500">Total Antrian Hari Ini</p>
+        <div class="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+                title="Total Antrian Hari Ini"
+                :value="statistics.total"
+                color="blue"
+            />
 
-                <h1 class="text-5xl font-bold mt-3">
-                    {{ statistics.total }}
-                </h1>
-            </div>
+            <StatCard
+                title="Antrian Aktif"
+                :value="statistics.active"
+                color="amber"
+            />
 
-            <div class="bg-white rounded-3xl shadow p-6">
-                <p class="text-gray-500">Antrian Aktif</p>
+            <StatCard
+                title="Antrian Selesai"
+                :value="statistics.finished"
+                color="emerald"
+            />
 
-                <h1 class="text-5xl font-bold mt-3">
-                    {{ statistics.active }}
-                </h1>
-            </div>
-
-            <div class="bg-white rounded-3xl shadow p-6">
-                <p class="text-gray-500">Antrian Selesai</p>
-
-                <h1 class="text-5xl font-bold mt-3">
-                    {{ statistics.finished }}
-                </h1>
-            </div>
-
-            <div class="bg-white rounded-3xl shadow p-6">
-                <p class="text-gray-500">Rata-rata Waktu</p>
-
-                <h1 class="text-5xl font-bold mt-3">
-                    {{ statistics.average }}m
-                </h1>
-            </div>
+            <StatCard
+                title="Rata-rata Waktu"
+                :value="`${statistics.average} Menit`"
+                color="violet"
+            />
         </div>
 
         <div class="grid grid-cols-3 gap-8">
             <div class="col-span-2">
-                <div class="bg-white rounded-3xl shadow p-6">
-                    <h2 class="text-2xl font-bold mb-5">Antrian Aktif</h2>
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 class="mb-5 text-lg font-semibold text-slate-800">Antrian Aktif</h2>
 
                     <table class="w-full">
                         <thead>
-                            <tr class="border-b">
+                            <tr class="border-b border-slate-200 bg-slate-50">
                                 <th class="py-3">Nomor</th>
 
                                 <th>Layanan</th>
@@ -89,7 +82,7 @@ const badgeClass = (status) => {
                             <tr
                                 v-for="queue in activeQueues"
                                 :key="queue.id"
-                                class="border-b text-center"
+                                class="border-b border-slate-200 bg-slate-50"
                             >
                                 <td class="py-4 font-bold">
                                     {{ queue.queue_number }}
@@ -118,8 +111,8 @@ const badgeClass = (status) => {
             </div>
 
             <div>
-                <div class="bg-white rounded-3xl shadow p-6">
-                    <h2 class="text-2xl font-bold mb-5">Status Loket</h2>
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 class="mb-5 text-lg font-semibold text-slate-800">Status Loket</h2>
 
                     <div
                         v-for="counter in counterStatus"

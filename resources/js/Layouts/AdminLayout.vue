@@ -1,27 +1,23 @@
 <script setup>
-import Sidebar from '@/Components/Layout/Sidebar.vue'
-import Navbar from '@/Components/Layout/Navbar.vue'
-import FlashMassage from '@/Components/FlashMessage.vue'
+import Sidebar from "@/Components/Layout/Sidebar.vue";
+import Navbar from "@/Components/Layout/Navbar.vue";
+import FlashMessage from "@/Components/FlashMessage.vue";
 </script>
 
 <template>
-    <div class="flex bg-slate-100 min-h-screen">
-
+    <div class="flex min-h-screen bg-slate-100">
         <Sidebar />
 
-        <div class="flex-1 flex flex-col">
-
+        <div class="flex flex-1 flex-col">
             <Navbar />
 
-            <main class="flex-1 p-8 overflow-y-auto">
+            <main class="flex-1">
+                <div class="p-8">
+                    <FlashMessage />
 
-                <FlashMassage />
-
-                <slot />
-
+                    <slot />
+                </div>
             </main>
-
         </div>
-
     </div>
 </template>
