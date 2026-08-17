@@ -2,6 +2,7 @@
 import AdminLayout from "@/Layouts/AdminLayout.vue";
 import StatCard from "@/Components/Dashboard/StatCard.vue";
 import { Head } from "@inertiajs/vue3";
+import { can } from "@/lib/can.js";
 
 defineProps({
     statistics: Object,

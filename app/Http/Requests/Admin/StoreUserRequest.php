@@ -15,9 +15,9 @@ class StoreUserRequest extends FormRequest
     {
         return [
 
-            'role_id' => [
+            'role' => [
                 'required',
-                'exists:roles,id',
+                'exists:roles,name',
             ],
 
             'name' => [
@@ -48,8 +48,8 @@ class StoreUserRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'role_id.required' => 'Role wajib dipilih.',
-            'role_id.exists' => 'Role yang dipilih tidak valid.',
+            'role.required' => 'Role wajib dipilih.',
+            'role.exists' => 'Role yang dipilih tidak valid.',
 
             'name.required' => 'Nama wajib diisi.',
             'name.max' => 'Nama maksimal 255 karakter.',

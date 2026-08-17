@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Http\Request;
 use App\Services\ServiceService;
 use App\Models\Service;
@@ -10,12 +10,22 @@ use App\Http\Requests\Admin\StoreServiceRequest;
 use App\Http\Requests\Admin\UpdateServiceRequest;
 use Illuminate\Database\QueryException;
 
-class ServiceController extends Controller
+class ServiceController extends BaseController
 {
     public function __construct(
         protected ServiceService $serviceService
     ) {
-        //
+        $this->middleware('permission:service.view')
+            ->only('index');
+
+        $this->middleware('permission:service.create')
+            ->only(['create', 'store']);
+
+        $this->middleware('permission:service.update')
+            ->only(['edit', 'update']);
+
+        $this->middleware('permission:service.delete')  
+            ->only('destroy');
     }
     /**
      * Display a listing of the resource.

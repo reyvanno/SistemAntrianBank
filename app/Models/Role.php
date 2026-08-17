@@ -2,17 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Spatie\Permission\Models\Role as SpatieRole;
 
-class Role extends Model
+class Role extends SpatieRole
 {
     protected $fillable = [
         'name',
+        'guard_name',
         'description',
     ];
-
-    public function users()
-    {
-        return $this->hasMany(User::class);
-    }
 }

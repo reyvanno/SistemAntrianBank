@@ -8,6 +8,7 @@ import SearchBox from "@/Components/Shared/SearchBox.vue";
 import DataTable from "@/Components/Shared/DataTable.vue";
 import Pagination from "@/Components/Shared/Pagination.vue";
 import DangerButton from "@/Components/DangerButton.vue";
+import { can } from "@/lib/can";
 
 const props = defineProps({
     services: Object,
@@ -51,6 +52,7 @@ const page = usePage();
             <h1 class="text-3xl font-bold">Layanan</h1>
 
             <Link
+                v-if="can('service.create')"
                 :href="route('admin.services.create')"
                 class="bg-indigo-600 text-white px-5 py-3 rounded-lg"
             >
@@ -77,13 +79,15 @@ const page = usePage();
                 <td>
                     <div class="flex justify-center gap-2">
                         <Link
+                            v-if="can('service.update')"
                             :href="route('admin.services.edit', service.id)"
                             class="bg-yellow-500 text-white px-4 py-2 rounded"
                         >
                             Edit
                         </Link>
 
-                        <DangerButton   
+                        <DangerButton  
+                            v-if="can('service.delete')"
                             @click="destroy(service.id)"
                         >
                             Hapus

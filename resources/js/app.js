@@ -21,14 +21,20 @@ createInertiaApp({
         ),
 
     setup({ el, App, props, plugin }) {
-        createApp({
+        const app = createApp({
             render: () => h(App, props),
         })
-            .use(plugin)
+            app.use(plugin)
 
-            .use(ZiggyVue)
+            app.use(ZiggyVue)
 
-            .mount(el);
+            //Global Permission Helper
+            app.config.globalProperties.can = (permission) => {
+                const pemissions = props.initialPage.props.auth?.user?.permissions ?? [];
+                return pemissions.includes(permission);
+            };
+
+            app.mount(el);
     },
 
     progress: {

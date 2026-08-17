@@ -7,6 +7,7 @@ import SearchBox from "@/Components/Shared/SearchBox.vue";
 import DataTable from "@/Components/Shared/DataTable.vue";
 import Pagination from "@/Components/Shared/Pagination.vue";
 import DangerButton from "@/Components/DangerButton.vue";
+import { can } from "@/lib/can";
 
 const props = defineProps({
     counters: Object,
@@ -53,6 +54,7 @@ const destroy = async (id) => {
             <h1 class="text-3xl font-bold">Loket</h1>
 
             <Link
+                v-if="can('counter.create')"
                 :href="route('admin.counters.create')"
                 class="bg-indigo-600 text-white px-5 py-3 rounded-lg"
             >
@@ -99,6 +101,7 @@ const destroy = async (id) => {
                     <td>
                         <div class="flex justify-center gap-2">
                             <Link
+                                v-if="can('counter.update')"
                                 :href="route('admin.counters.edit', counter.id)"
                                 class="bg-yellow-500 text-white px-4 py-2 rounded"
                             >
@@ -106,6 +109,7 @@ const destroy = async (id) => {
                             </Link>
 
                             <DangerButton
+                                v-if="can('counter.delete')"
                                 @click="destroy(counter.id)"
                             >
                                 Hapus

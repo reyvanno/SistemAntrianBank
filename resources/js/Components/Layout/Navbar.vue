@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 import { usePage } from "@inertiajs/vue3";
 import { CalendarDaysIcon } from "@heroicons/vue/24/outline";
 
@@ -8,7 +8,7 @@ const page = usePage();
 const user = computed(() => page.props.auth.user);
 
 const roleTitle = computed(() => {
-    switch (user.value.role.name) {
+    switch (user.value.role) {
         case "admin":
             return "Administrator";
         case "teller":
@@ -20,12 +20,36 @@ const roleTitle = computed(() => {
     }
 });
 
-const date = new Intl.DateTimeFormat("id-ID", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-}).format(new Date());
+const date = ref("");
+const time = ref("");
+
+const updateClock = () => {
+    const now = new Date();
+
+    date.value = new Intl.DateTimeFormat("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+    }).format(now);
+
+    time.value = now.toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+    });
+};
+
+let timer;
+
+onMounted(() => {
+    updateClock();
+    timer = setInterval(updateClock, 1000);
+});
+
+onUnmounted(() => {
+    clearInterval(timer);
+});
 </script>
 
 <template>
@@ -60,9 +84,9 @@ const date = new Intl.DateTimeFormat("id-ID", {
             >
                 <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
 
-                <span class="text-sm font-medium text-emerald-700">
-                    Online
-                </span>
+                <p class="text-lg font-bold text-slate-800">
+                        {{ time }}
+                    </p>
             </div>
         </div>
     </header>

@@ -6,10 +6,9 @@ use App\Http\Controllers\Admin\CounterController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\QueueController;
+use App\Http\Controllers\Admin\RoleController;
 
-Route::middleware([
-    'auth',
-])
+Route::middleware(['auth'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
@@ -17,28 +16,23 @@ Route::middleware([
         Route::get('/dashboard', [
             DashboardController::class,
             'index',
-        ])
-            ->middleware('role:admin,teller,customer_service')
-            ->name('dashboard');
-            
+        ])->name('dashboard');
+
         Route::resource('services', ServiceController::class)
-            ->middleware('role:admin')
             ->except(['show']);
 
         Route::resource('counters', CounterController::class)
-            ->middleware('role:admin')
             ->except(['show']);
 
         Route::resource('users', UserController::class)
-            ->middleware('role:admin')
-            ->except('show');
+            ->except(['show']);
 
-        Route::resource(
-            'queues',
-            QueueController::class
-        )->only([
-                    'index',
-                    'store',
-                ])
-            ->middleware('role:admin,teller');
+        Route::resource('queues', QueueController::class)
+            ->only([
+                'index',
+                'store',
+            ]);
+
+        Route::resource('roles', RoleController::class)
+            ->except(['show']);
     });

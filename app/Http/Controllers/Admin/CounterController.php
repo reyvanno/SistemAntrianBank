@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller as BaseController;
 use App\Http\Requests\Admin\StoreCounterRequest;
 use App\Http\Requests\Admin\UpdateCounterRequest;
 use App\Models\Counter;
@@ -10,11 +10,23 @@ use App\Models\Service;
 use App\Services\CounterService;
 use Illuminate\Database\QueryException;
 
-class CounterController extends Controller
+class CounterController extends BaseController
 {
     public function __construct(
         protected CounterService $counterService
-    ) {}
+    ) {
+        $this->middleware('permission:counter.view')
+            ->only('index');
+
+        $this->middleware('permission:counter.create')
+            ->only(['create', 'store']);
+
+        $this->middleware('permission:counter.update')
+            ->only(['edit', 'update']);
+
+        $this->middleware('permission:counter.delete')
+            ->only('destroy');
+    }
 
     public function index()
     {

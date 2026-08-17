@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\Role;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class RoleSeeder extends Seeder
 {
@@ -13,19 +13,29 @@ class RoleSeeder extends Seeder
      */
     public function run(): void
     {
-        Role::upsert([
+        app(PermissionRegistrar::class)
+            ->forgetCachedPermissions();
+
+        Role::upsert(
             [
-                'name' => 'admin',
-                'description' => 'Administrator',
+                [
+                    'name' => 'admin',
+                    'guard_name' => 'web',
+                ],
+                [
+                    'name' => 'teller',
+                    'guard_name' => 'web',
+                ],
+                [
+                    'name' => 'customer_service',
+                    'guard_name' => 'web',
+                ],
             ],
-            [
-                'name' => 'teller',
-                'description' => 'Teller',
-            ],
-            [
-                'name' => 'customer_service',
-                'description' => 'Customer Service',
-            ],
-        ], ['name'], ['description']);
+            ['name', 'guard_name'],
+            []
+        );
+
+        app(PermissionRegistrar::class)
+            ->forgetCachedPermissions();
     }
 }

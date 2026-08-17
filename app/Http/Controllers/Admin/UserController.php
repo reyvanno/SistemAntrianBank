@@ -2,19 +2,30 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller as BaseController;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
-use App\Models\Role;
+use Spatie\Permission\Models\Role;
 use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Database\QueryException;
 
-class UserController extends Controller
+class UserController extends BaseController
 {
     public function __construct(
         protected UserService $userService
     ) {
+        $this->middleware('permission:user.view')
+        ->only('index');
+
+        $this->middleware('permission:user.create')
+        ->only(['create', 'store']);
+
+        $this->middleware('permission:user.update')
+        ->only(['edit', 'update']);
+
+        $this->middleware('permission:user.delete')
+        ->only('destroy');
     }
 
     public function index()
@@ -33,7 +44,10 @@ class UserController extends Controller
     public function create()
     {
         return inertia('Admin/Users/Create', [
-            'roles' => Role::orderBy('description')->get(),
+            'roles' => Role::query()
+                ->select('id','name')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -51,8 +65,11 @@ class UserController extends Controller
     public function edit(User $user)
     {
         return inertia('Admin/Users/Edit', [
-            'user' => $user,
-            'roles' => Role::orderBy('description')->get(),
+            'user' => $user->load('roles', 'counter'),
+            'roles' => Role::query()
+                ->select('id','name')
+                ->  orderBy('name')
+                ->get(),
         ]);
     }
 

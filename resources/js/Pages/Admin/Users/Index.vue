@@ -7,6 +7,7 @@ import SearchBox from "@/Components/Shared/SearchBox.vue";
 import DataTable from "@/Components/Shared/DataTable.vue";
 import Pagination from "@/Components/Shared/Pagination.vue";
 import DangerButton from "@/Components/DangerButton.vue";
+import { can } from "@/lib/can";
 
 const props = defineProps({
     users: Object,
@@ -14,6 +15,24 @@ const props = defineProps({
 });
 
 const page = usePage();
+
+const roleLabel = (roles) => {
+    if (!roles.length) return "-";
+
+    switch (roles[0].name) {
+        case "admin":
+            return "Administrator";
+
+        case "teller":
+            return "Teller";
+
+        case "customer_service":
+            return "Customer Service";
+
+        default:
+            return roles[0].name;
+    }
+};
 
 const search = ref(props.filters.search ?? "");
 
@@ -53,6 +72,7 @@ const destroy = async (id) => {
             </h1>
 
             <Link
+                v-if="can('user.create')"
                 :href="route('admin.users.create')"
                 class="bg-indigo-600 text-white px-5 py-3 rounded-lg"
             >
@@ -80,7 +100,7 @@ const destroy = async (id) => {
                     </td>
 
                     <td>
-                        {{ user.role.description }}
+                        {{ roleLabel(user.roles) }}
                     </td>
 
                     <td>
@@ -102,6 +122,7 @@ const destroy = async (id) => {
                     <td>
                         <div class="flex justify-center gap-2">
                             <Link
+                                v-if="can('user.update')"
                                 :href="route('admin.users.edit', user.id)"
                                 class="bg-yellow-500 text-white px-4 py-2 rounded"
                             >
@@ -109,6 +130,7 @@ const destroy = async (id) => {
                             </Link>
 
                             <DangerButton
+                                v-if="can('user.delete')"
                                 @click="destroy(user.id)"
                             >
                                 Hapus

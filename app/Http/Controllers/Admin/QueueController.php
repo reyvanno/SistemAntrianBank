@@ -2,16 +2,33 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller as BaseController;
 use App\Http\Requests\Admin\StoreQueueRequest;
 use App\Models\Service;
 use App\Services\QueueService;
 
-class QueueController extends Controller
+class QueueController extends BaseController
 {
     public function __construct(
         protected QueueService $queueService
     ) {
+        $this->middleware('permission:queue.view')
+            ->only('index');
+
+        $this->middleware('permission:queue.create')
+            ->only('store');
+        
+        $this->middleware('permission:queue.call')
+            ->only('call');
+        
+        $this->middleware('permission:queue.start')
+            ->only('start');
+
+        $this->middleware('permission:queue.finish')
+            ->only('finish');
+        
+        $this->middleware('permission:queue.cancel')
+            ->only('cancel');
     }
 
     public function index()

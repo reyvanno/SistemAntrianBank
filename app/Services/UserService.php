@@ -12,7 +12,7 @@ class UserService
     {
         return User::query()
 
-            ->with('role')
+            ->with('roles')
 
             ->when($search, function ($query) use ($search) {
 
@@ -22,9 +22,9 @@ class UserService
 
                     ->orWhere('email', 'ILIKE', "%{$search}%")
 
-                    ->orWhereHas('role', function ($q) use ($search) {
+                    ->orWhereHas('roles', function ($q) use ($search) {
 
-                        $q->where('description', 'ILIKE', "%{$search}%");
+                        $q->where('name', 'ILIKE', "%{$search}%");
 
                     });
 
@@ -39,13 +39,25 @@ class UserService
 
     public function create(array $data): User
     {
+        $role = $data['role'];
+
+        unset($data['role']);
+        
         $data['password'] = Hash::make($data['password']);
 
-        return User::create($data);
+        $user = User::create($data);
+
+        $user->assignRole($role);
+
+        return $user;
     }
 
     public function update(User $user, array $data): User
     {
+        $role = $data['role'];
+
+        unset($data['role']);
+
         if (!empty($data['password'])) {
 
             $data['password'] = Hash::make($data['password']);
@@ -57,6 +69,8 @@ class UserService
         }
 
         $user->update($data);
+
+        $user->syncRoles($role);
 
         return $user->refresh();
     }
