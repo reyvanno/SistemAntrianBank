@@ -35,6 +35,30 @@ class RoleSeeder extends Seeder
             []
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Initial Admin Permissions
+        |--------------------------------------------------------------------------
+        |
+        | Permission berikut hanya digunakan sebagai akses awal
+        | untuk mengelola role dan permission melalui dashboard.
+        |
+        */
+
+        $admin = Role::findByName('admin', 'web');
+
+        $admin->givePermissionTo([
+            'role.view',
+            'role.create',
+            'role.update',
+            'role.delete',
+
+            'permission.view',
+            'permission.create',
+            'permission.update',
+            'permission.delete',
+        ]);
+
         app(PermissionRegistrar::class)
             ->forgetCachedPermissions();
     }

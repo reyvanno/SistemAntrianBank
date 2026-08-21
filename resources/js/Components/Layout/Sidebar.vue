@@ -14,6 +14,7 @@ import {
     ArrowRightOnRectangleIcon,
     UserCircleIcon,
     ShieldCheckIcon,
+    KeyIcon,
 } from "@heroicons/vue/24/outline";
 import { can } from "@/lib/can";
 
@@ -98,6 +99,12 @@ const allMenus = [
                 route: "admin.roles.index",
                 icon: ShieldCheckIcon,
                 permission: "role.view"
+            },
+            {
+                title: "Permission Management",
+                route: "admin.permissions.index",
+                icon: KeyIcon,
+                permission: "permission.view"
             },
         ],
     },

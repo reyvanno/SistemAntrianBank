@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\QueueController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\PermissionController;
 
 Route::middleware(['auth'])
     ->prefix('admin')
@@ -34,5 +35,8 @@ Route::middleware(['auth'])
             ]);
 
         Route::resource('roles', RoleController::class)
+            ->except(['show']);
+
+        Route::resource('permissions', PermissionController::class)
             ->except(['show']);
     });

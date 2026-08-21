@@ -17,6 +17,7 @@ class UserSeeder extends Seeder
         User::upsert(
             [
                 [
+                    'username' => 'admin',
                     'name' => 'Administrator',
                     'email' => 'admin@sistemantrianbank.test',
                     'password' => Hash::make('password'),
@@ -24,6 +25,7 @@ class UserSeeder extends Seeder
                     'is_active' => true,
                 ],
                 [
+                    'username' => 'teller',
                     'name' => 'Teller 1',
                     'email' => 'teller@sistemantrianbank.test',
                     'password' => Hash::make('password'),
@@ -31,6 +33,7 @@ class UserSeeder extends Seeder
                     'is_active' => true,
                 ],
                 [
+                    'username' => 'customer_service',
                     'name' => 'Customer Service 1',
                     'email' => 'cs@sistemantrianbank.test',
                     'password' => Hash::make('password'),
@@ -42,6 +45,7 @@ class UserSeeder extends Seeder
             [
                 'name',
                 'password',
+                'username',
                 'counter_id',
                 'is_active',
             ]

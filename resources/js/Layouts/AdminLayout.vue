@@ -5,13 +5,19 @@ import FlashMessage from "@/Components/FlashMessage.vue";
 </script>
 
 <template>
-    <div class="flex min-h-screen bg-slate-100">
-        <Sidebar />
+    <div class="flex h-screen overflow-hidden bg-slate-100">
+        <!-- SIDEBAR -->
+        <aside class="h-screen shrink-0 overflow-y-auto">
+            <Sidebar />
+        </aside>
 
-        <div class="flex flex-1 flex-col">
+        <!-- MAIN AREA -->
+        <div class="flex min-w-0 flex-1 flex-col">
+            <!-- NAVBAR -->
             <Navbar />
 
-            <main class="flex-1">
+            <!-- CONTENT -->
+            <main class="min-h-0 flex-1 overflow-y-auto">
                 <div class="p-8">
                     <FlashMessage />
 

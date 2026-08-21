@@ -21,6 +21,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'counter_id',
+        'username',
         'name',
         'email',
         'password',

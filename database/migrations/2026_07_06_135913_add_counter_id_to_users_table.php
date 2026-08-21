@@ -10,7 +10,7 @@ return new class extends Migration {
         Schema::table('users', function (Blueprint $table) {
             $table->foreignId('counter_id')
                 ->nullable()
-                ->after('role_id')
+                ->after('is_active')
                 ->constrained()
                 ->cascadeOnUpdate()
                 ->nullOnDelete();

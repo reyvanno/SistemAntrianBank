@@ -58,6 +58,12 @@ class PermissionSeeder extends Seeder
             'role.create',
             'role.update',
             'role.delete',
+
+            //Permission
+            'permission.view',
+            'permission.create',
+            'permission.update',
+            'permission.delete',
         ];
 
         $data = collect($permissions)

@@ -85,7 +85,7 @@ const destroy = async (id) => {
             placeholder="Cari user..."
         />
         
-        <DataTable :headers="['Nama', 'Email', 'Role', 'Status', 'Aksi']">
+        <DataTable :headers="['Nama', 'Username', 'Email', 'Role', 'Status', 'Aksi']">
                 <tr
                     v-for="user in users.data"
                     :key="user.id"
@@ -93,6 +93,10 @@ const destroy = async (id) => {
                 >
                     <td class="p-4">
                         {{ user.name }}
+                    </td>
+
+                    <td>
+                        {{ user.username }}
                     </td>
 
                     <td>

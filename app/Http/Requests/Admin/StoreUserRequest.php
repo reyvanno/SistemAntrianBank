@@ -20,6 +20,14 @@ class StoreUserRequest extends FormRequest
                 'exists:roles,name',
             ],
 
+            'username' => [
+                'required',
+                'string',
+                'max:50',
+                'alpha_dash',
+                'unique:users,username',
+            ],
+
             'name' => [
                 'required',
                 'string',
@@ -50,6 +58,11 @@ class StoreUserRequest extends FormRequest
         return [
             'role.required' => 'Role wajib dipilih.',
             'role.exists' => 'Role yang dipilih tidak valid.',
+
+            'username.required' => 'Username wajib diisi.',
+            'username.max' => 'Username maksimal 50 karakter.',
+            'username.alpha_dash' => 'Username hanya boleh menggunakan huruf, angka, tanda hubung, dan underscore.',
+            'username.unique' => 'Username sudah digunakan.',
 
             'name.required' => 'Nama wajib diisi.',
             'name.max' => 'Nama maksimal 255 karakter.',
