@@ -1,20 +1,55 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Customer\QueueController;
 use App\Http\Controllers\MonitorController;
-use Illuminate\Foundation\Application;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::redirect('/', '/login');
 
-Route::get('/monitor', [MonitorController::class, 'index'])
-    ->name('monitor');
-    
+Route::get('/monitor', [
+    MonitorController::class,
+    'index',
+])->name('monitor');
+
+/*
+|--------------------------------------------------------------------------
+| Customer Queue
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/ambil-nomor', [
+    QueueController::class,
+    'create',
+])->name('customer.queue.create');
+
+Route::post('/ambil-nomor', [
+    QueueController::class,
+    'store',
+])->name('customer.queue.store');
+
+/*
+|--------------------------------------------------------------------------
+| Authenticated User
+|--------------------------------------------------------------------------
+*/
+
 Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::get('/profile', [
+        ProfileController::class,
+        'edit',
+    ])->name('profile.edit');
+
+    Route::patch('/profile', [
+        ProfileController::class,
+        'update',
+    ])->name('profile.update');
+
+    Route::delete('/profile', [
+        ProfileController::class,
+        'destroy',
+    ])->name('profile.destroy');
 });
 
 require __DIR__ . '/auth.php';

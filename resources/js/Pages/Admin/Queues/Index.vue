@@ -2,10 +2,10 @@
 import AdminLayout from "@/Layouts/AdminLayout.vue";
 import { Head, Link, router, useForm, usePage } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
-import { success } from "@/lib/swal";
 import SearchBox from "@/Components/Shared/SearchBox.vue";
 import DataTable from "@/Components/Shared/DataTable.vue";
 import Pagination from "@/Components/Shared/Pagination.vue";
+import { can } from "@/lib/can";
 
 const props = defineProps({
     queues: Object,
@@ -39,7 +39,6 @@ const submit = () => {
         preserveScroll: true,
 
         onSuccess: () => {
-            success("Nomor antrian berhasil dibuat.");
             form.reset();
         },
     });
@@ -74,7 +73,7 @@ const badge = (status) => {
             <h1 class="text-3xl font-bold">Antrian</h1>
         </div>
 
-        <div class="bg-white rounded-xl shadow p-6 mb-6">
+        <div v-if="can('queue.create')" class="bg-white rounded-xl shadow p-6 mb-6">
             <h2 class="text-xl font-semibold mb-5">Ambil Nomor Antrian</h2>
 
             <form class="flex gap-4" @submit.prevent="submit" novalidate>

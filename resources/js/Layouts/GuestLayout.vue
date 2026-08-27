@@ -1,6 +1,7 @@
 <script setup>
 import Navbar from "@/Components/Layout/Navbar.vue";
-import AplicationLogo from "@/Components/ApplicationLogo.vue";
+
+const currentYear = new Date().getFullYear();
 </script>
 
 <template>
@@ -14,7 +15,7 @@ import AplicationLogo from "@/Components/ApplicationLogo.vue";
                 <slot />
             </div>
         </main>
-         <!-- FOOTER -->
+
         <footer
             class="shrink-0 border-t border-slate-200 bg-white"
         >

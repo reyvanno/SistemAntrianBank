@@ -10,6 +10,7 @@ import {
     ArrowRightOnRectangleIcon,
 } from "@heroicons/vue/24/outline";
 import { ref } from "vue";
+import { error } from "@/lib/toast";
 
 defineProps({
     canResetPassword: {
@@ -33,6 +34,25 @@ const form = useForm({
 
 const submit = () => {
     form.post(route("login"), {
+        onSuccess: () => {
+            // Success ditampilkan melalui flash session
+            // dari AuthenticatedSessionController.
+        },
+
+        onError: (errors) => {
+            if (errors.login) {
+                error(errors.login);
+                return;
+            }
+
+            if (errors.password) {
+                error(errors.password);
+                return;
+            }
+
+            error("Username/email atau password yang dimasukkan salah.");
+        },
+
         onFinish: () => {
             form.reset("password");
         },

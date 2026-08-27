@@ -2,7 +2,7 @@
 import AdminLayout from "@/Layouts/AdminLayout.vue";
 import { Head, Link, router, usePage } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
-import { confirmDelete } from "@/lib/swal";
+import { confirmDelete } from "@/lib/confirm";
 import SearchBox from "@/Components/Shared/SearchBox.vue";
 import DataTable from "@/Components/Shared/DataTable.vue";
 import Pagination from "@/Components/Shared/Pagination.vue";

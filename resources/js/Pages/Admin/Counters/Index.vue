@@ -1,8 +1,8 @@
 <script setup>
 import AdminLayout from "@/Layouts/AdminLayout.vue";
-import { Head, Link, router, usePage } from "@inertiajs/vue3";
+import { Head, Link, router } from "@inertiajs/vue3";
 import { ref, watch } from "vue";
-import { confirmDelete } from "@/lib/swal";
+import { confirmDelete } from "@/lib/confirm";
 import SearchBox from "@/Components/Shared/SearchBox.vue";
 import DataTable from "@/Components/Shared/DataTable.vue";
 import Pagination from "@/Components/Shared/Pagination.vue";
@@ -14,18 +14,14 @@ const props = defineProps({
     filters: Object,
 });
 
-const page = usePage();
-
 const search = ref(props.filters.search ?? "");
 
 watch(search, (value) => {
     router.get(
         route("admin.counters.index"),
-
         {
             search: value,
         },
-
         {
             preserveState: true,
             replace: true,
@@ -34,7 +30,6 @@ watch(search, (value) => {
 });
 
 const destroy = async (id) => {
-
     const result = await confirmDelete();
 
     if (!result.isConfirmed) return;
@@ -42,7 +37,6 @@ const destroy = async (id) => {
     router.delete(
         route("admin.counters.destroy", id)
     );
-
 };
 </script>
 

@@ -5,88 +5,90 @@ namespace App\Services;
 use App\Models\Queue;
 use App\Models\Service;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class QueueService
 {
+    /**
+     * Menampilkan daftar antrian untuk admin.
+     */
     public function paginate(?string $search = null): LengthAwarePaginator
     {
         return Queue::query()
-
             ->with([
                 'service',
                 'counter',
                 'handledBy',
             ])
-
             ->when($search, function ($query) use ($search) {
-
                 $query->where(
                     'queue_number',
                     'ILIKE',
                     "%{$search}%"
                 );
-
             })
-
             ->latest()
-
             ->paginate(10)
-
             ->withQueryString();
     }
 
+    /**
+     * Membuat nomor antrian baru.
+     */
     public function create(array $data): Queue
     {
-        $service = Service::findOrFail(
-            $data['service_id']
-        );
+        return DB::transaction(function () use ($data) {
 
-        $prefix = $service->code;
+            /*
+             * Lock service terlebih dahulu.
+             *
+             * Tujuannya supaya dua customer yang mengambil
+             * nomor pada service yang sama secara bersamaan
+             * tidak mendapatkan nomor yang sama.
+             */
+            $service = Service::query()
+                ->whereKey($data['service_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $lastQueue = Queue::query()
+            $prefix = $service->code;
 
-            ->whereDate(
-                'created_at',
-                today()
-            )
+            /*
+             * Cari nomor terakhir pada hari ini
+             * untuk service yang sama.
+             */
+            $lastQueue = Queue::query()
+                ->whereDate('created_at', today())
+                ->where('service_id', $service->id)
+                ->orderByDesc('id')
+                ->first();
 
-            ->where(
-                'service_id',
-                $service->id
-            )
+            $number = 1;
 
-            ->latest()
+            if ($lastQueue) {
+                $lastNumber = (int) preg_replace(
+                    '/\D/',
+                    '',
+                    $lastQueue->queue_number
+                );
 
-            ->first();
+                $number = $lastNumber + 1;
+            }
 
-        $number = 1;
-
-        if ($lastQueue) {
-
-            $number = intval(
-                substr(
-                    $lastQueue->queue_number,
-                    1
-                )
-            ) + 1;
-
-        }
-
-        return Queue::create([
-
-            'queue_number' =>
+            $queueNumber =
                 $prefix .
                 str_pad(
                     $number,
                     3,
                     '0',
                     STR_PAD_LEFT
-                ),
+                );
 
-            'service_id' => $service->id,
-
-            'status' => 'WAITING',
-
-        ]);
+            return Queue::create([
+                'queue_number' => $queueNumber,
+                'service_id' => $service->id,
+                'status' => 'WAITING',
+            ]);
+        });
     }
 }

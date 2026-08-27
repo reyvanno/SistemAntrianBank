@@ -32,13 +32,17 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
 
-            'debug' => 'Middleware Berjalan',
-
             'auth' => [
-                'user' => fn () => $request->user()
+                'user' => fn() => $request->user()
                     ? [
-                        ...$request->user()->load('counter')->toArray(),
-                        'role' => $request->user()->getRoleNames()->first(),
+                        ...$request->user()
+                            ->load('counter')
+                            ->toArray(),
+
+                        'role' => $request->user()
+                            ->getRoleNames()
+                            ->first(),
+
                         'permissions' => $request->user()
                             ->getAllPermissions()
                             ->pluck('name')
@@ -48,11 +52,14 @@ class HandleInertiaRequests extends Middleware
             ],
 
             'flash' => [
+                'success' => fn() =>
+                    $request->session()->get('success'),
 
-                'success' => fn() => $request->session()->get('success'),
+                'error' => fn() =>
+                    $request->session()->get('error'),
 
-                'error' => fn() => $request->session()->get('error'),
-
+                'queue' => fn() =>
+                    $request->session()->get('queue'),
             ],
         ];
     }

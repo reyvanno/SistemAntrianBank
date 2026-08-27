@@ -3,6 +3,7 @@ import AdminLayout from "@/Layouts/AdminLayout.vue";
 import StatCard from "@/Components/Dashboard/StatCard.vue";
 import { Head } from "@inertiajs/vue3";
 import { can } from "@/lib/can.js";
+import DataTable from "@/Components/Shared/DataTable.vue";
 
 defineProps({
     statistics: Object,
@@ -61,89 +62,53 @@ const badgeClass = (status) => {
             />
         </div>
 
-        <div class="grid grid-cols-3 gap-8">
-            <div class="col-span-2">
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 class="mb-5 text-lg font-semibold text-slate-800">Antrian Aktif</h2>
+        <div class="col-span-2">
+            <div
+                class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            >
+                <h2 class="mb-5 text-lg font-semibold text-slate-800">
+                    Antrian Aktif
+                </h2>
 
-                    <table class="w-full">
-                        <thead>
-                            <tr class="border-b border-slate-200 bg-slate-50">
-                                <th class="py-3">Nomor</th>
-
-                                <th>Layanan</th>
-
-                                <th>Loket</th>
-
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            <tr
-                                v-for="queue in activeQueues"
-                                :key="queue.id"
-                                class="border-b border-slate-200 bg-slate-50"
-                            >
-                                <td class="py-4 font-bold">
-                                    {{ queue.queue_number }}
-                                </td>
-
-                                <td>
-                                    {{ queue.service.name }}
-                                </td>
-
-                                <td>
-                                    {{ queue.counter?.code ?? "-" }}
-                                </td>
-
-                                <td>
-                                    <span
-                                        :class="badgeClass(queue.status)"
-                                        class="px-3 py-1 rounded-full text-sm"
-                                    >
-                                        {{ queue.status }}
-                                    </span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 class="mb-5 text-lg font-semibold text-slate-800">Status Loket</h2>
-
-                    <div
-                        v-for="counter in counterStatus"
-                        :key="counter.id"
-                        class="border rounded-xl p-4 mb-3"
+                <DataTable :headers="['Nomor', 'Layanan', 'Loket', 'Status']">
+                    <tr
+                        v-for="queue in activeQueues"
+                        :key="queue.id"
+                        class="border-b border-slate-100 last:border-0 hover:bg-slate-50"
                     >
-                        <div class="flex justify-between">
-                            <div>
-                                <p class="font-bold">
-                                    {{ counter.code }}
-                                </p>
+                        <td
+                            class="px-4 py-4 text-center font-bold text-slate-800"
+                        >
+                            {{ queue.queue_number }}
+                        </td>
 
-                                <p class="text-gray-500">
-                                    {{ counter.service.name }}
-                                </p>
-                            </div>
+                        <td class="px-4 py-4 text-center text-slate-600">
+                            {{ queue.service.name }}
+                        </td>
 
-                            <div class="text-right">
-                                <p
-                                    v-if="counter.queues.length"
-                                    class="font-bold"
-                                >
-                                    {{ counter.queues[0].queue_number }}
-                                </p>
+                        <td class="px-4 py-4 text-center text-slate-600">
+                            {{ queue.counter?.code ?? "-" }}
+                        </td>
 
-                                <p v-else class="text-gray-500">Kosong</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                        <td class="px-4 py-4 text-center">
+                            <span
+                                :class="badgeClass(queue.status)"
+                                class="inline-flex rounded-full px-3 py-1 text-sm font-semibold"
+                            >
+                                {{ queue.status }}
+                            </span>
+                        </td>
+                    </tr>
+
+                    <tr v-if="activeQueues.length === 0">
+                        <td
+                            colspan="4"
+                            class="px-4 py-10 text-center text-sm text-slate-500"
+                        >
+                            Tidak ada antrian aktif.
+                        </td>
+                    </tr>
+                </DataTable>
             </div>
         </div>
     </AdminLayout>

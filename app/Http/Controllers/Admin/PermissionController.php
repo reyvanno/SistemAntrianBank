@@ -3,15 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Database\QueryException;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use App\Http\Requests\Admin\StorePermissionRequest;
+use App\Http\Requests\Admin\UpdatePermissionRequest;
 use Spatie\Permission\Models\Permission;
+use App\Services\PermissionService;
+use Illuminate\Database\QueryException;
 
 class PermissionController extends BaseController
 {
-    public function __construct()
-    {
+    public function __construct(
+        protected PermissionService $permissionService
+    ) {
         $this->middleware('permission:permission.view')
             ->only('index');
 
@@ -30,15 +32,14 @@ class PermissionController extends BaseController
      */
     public function index()
     {
-        $permissions = Permission::query()
-            ->where('guard_name', 'web')
-            ->withCount('roles')
-            ->orderBy('name')
-            ->paginate(15)
-            ->withQueryString();
-
         return inertia('Admin/Permissions/Index', [
-            'permissions' => $permissions,
+            'permissions' => $this->permissionService->paginate(
+                request('search')
+            ),
+
+            'filters' => [
+                'search' => request('search'),
+            ],
         ]);
     }
 
@@ -53,30 +54,19 @@ class PermissionController extends BaseController
     /**
      * Store a newly created permission.
      */
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                'regex:/^[a-z0-9_]+\.[a-z0-9_]+$/',
-                Rule::unique('permissions', 'name')
-                    ->where('guard_name', 'web'),
-            ],
-        ], [
-            'name.regex' =>
-                'Format permission harus seperti: user.view atau queue.call.',
-        ]);
-
-        Permission::create([
-            'name' => $validated['name'],
-            'guard_name' => 'web',
-        ]);
+    public function store(
+        StorePermissionRequest $request
+    ) {
+        $this->permissionService->create(
+            $request->validated()
+        );
 
         return redirect()
             ->route('admin.permissions.index')
-            ->with('success', 'Permission berhasil ditambahkan.');
+            ->with(
+                'success',
+                'Permission berhasil ditambahkan.'
+            );
     }
 
     /**
@@ -84,11 +74,6 @@ class PermissionController extends BaseController
      */
     public function edit(Permission $permission)
     {
-        abort_unless(
-            $permission->guard_name === 'web',
-            404
-        );
-
         return inertia('Admin/Permissions/Edit', [
             'permission' => $permission,
         ]);
@@ -98,36 +83,20 @@ class PermissionController extends BaseController
      * Update the specified permission.
      */
     public function update(
-        Request $request,
+        UpdatePermissionRequest $request,
         Permission $permission
     ) {
-        abort_unless(
-            $permission->guard_name === 'web',
-            404
+        $this->permissionService->update(
+            $permission,
+            $request->validated()
         );
-
-        $validated = $request->validate([
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                'regex:/^[a-z0-9_]+\.[a-z0-9_]+$/',
-                Rule::unique('permissions', 'name')
-                    ->where('guard_name', 'web')
-                    ->ignore($permission->id),
-            ],
-        ], [
-            'name.regex' =>
-                'Format permission harus seperti: user.view atau queue.call.',
-        ]);
-
-        $permission->update([
-            'name' => $validated['name'],
-        ]);
 
         return redirect()
             ->route('admin.permissions.index')
-            ->with('success', 'Permission berhasil diperbarui.');
+            ->with(
+                'success',
+                'Permission berhasil diperbarui.'
+            );
     }
 
     /**
@@ -136,21 +105,9 @@ class PermissionController extends BaseController
     public function destroy(Permission $permission)
     {
         try {
-            abort_unless(
-                $permission->guard_name === 'web',
-                404
+            $this->permissionService->delete(
+                $permission
             );
-
-            if ($permission->roles()->exists()) {
-                return redirect()
-                    ->back()
-                    ->with(
-                        'error',
-                        'Permission tidak dapat dihapus karena masih digunakan oleh role.'
-                    );
-            }
-
-            $permission->delete();
 
             return redirect()
                 ->back()
@@ -163,7 +120,7 @@ class PermissionController extends BaseController
                 ->back()
                 ->with(
                     'error',
-                    'Permission tidak dapat dihapus karena masih digunakan.'
+                    'Permission tidak dapat dihapus karena masih digunakan oleh role.'
                 );
         }
     }

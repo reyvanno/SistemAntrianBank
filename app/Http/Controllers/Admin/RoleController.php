@@ -3,16 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use Illuminate\Routing\Controller as BaseController;
-use App\Models\Role;
-use Spatie\Permission\Models\Permission;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Spatie\Permission\Models\Role;
+use App\Services\RoleService;
+use App\Http\Requests\Admin\StoreRoleRequest;
+use App\Http\Requests\Admin\UpdateRoleRequest;
 use Illuminate\Database\QueryException;
 
 class RoleController extends BaseController
 {
-    public function __construct()
-    {
+    public function __construct(
+        protected RoleService $roleService
+    ) {
         $this->middleware('permission:role.view')
             ->only('index');
 
@@ -31,15 +32,14 @@ class RoleController extends BaseController
      */
     public function index()
     {
-        $roles = Role::query()
-            ->withCount('permissions')
-            ->withCount('users')
-            ->orderBy('name')
-            ->paginate(10)
-            ->withQueryString();
-
         return inertia('Admin/Roles/Index', [
-            'roles' => $roles,
+            'roles' => $this->roleService->paginate(
+                request('search')
+            ),
+
+            'filters' => [
+                'search' => request('search'),
+            ],
         ]);
     }
 
@@ -49,60 +49,27 @@ class RoleController extends BaseController
     public function create()
     {
         return inertia('Admin/Roles/Create', [
-            'permissions' => $this->getPermissions(),
+            'permissions' => $this->roleService
+                ->getPermissions(),
         ]);
     }
 
     /**
      * Store a newly created role.
      */
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('roles', 'name')
-                    ->where('guard_name', 'web'),
-            ],
-
-            'description' => [
-                'nullable',
-                'string',
-                'max:1000',
-            ],
-
-            'permissions' => [
-                'nullable',
-                'array',
-            ],
-
-            'permissions.*' => [
-                'integer',
-                Rule::exists('permissions', 'id')
-                    ->where('guard_name', 'web'),
-            ],
-        ]);
-
-        $role = Role::create([
-            'name' => $validated['name'],
-            'guard_name' => 'web',
-            'description' => $validated['description'] ?? null,
-        ]);
-
-        $permissionIds = $validated['permissions'] ?? [];
-
-        $permissionModels = Permission::query()
-            ->whereIn('id', $permissionIds)
-            ->where('guard_name', 'web')
-            ->get();
-
-        $role->syncPermissions($permissionModels);
+    public function store(
+        StoreRoleRequest $request
+    ) {
+        $this->roleService->create(
+            $request->validated()
+        );
 
         return redirect()
             ->route('admin.roles.index')
-            ->with('success', 'Role berhasil ditambahkan.');
+            ->with(
+                'success',
+                'Role berhasil ditambahkan.'
+            );
     }
 
     /**
@@ -115,60 +82,30 @@ class RoleController extends BaseController
 
         return inertia('Admin/Roles/Edit', [
             'role' => $role,
-            'permissions' => $this->getPermissions(),
+
+            'permissions' => $this->roleService
+                ->getPermissions(),
         ]);
     }
 
     /**
      * Update the specified role.
      */
-    public function update(Request $request, Role $role)
-    {
-        $validated = $request->validate([
-            'name' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('roles', 'name')
-                    ->where('guard_name', 'web')
-                    ->ignore($role->id),
-            ],
-
-            'description' => [
-                'nullable',
-                'string',
-                'max:1000',
-            ],
-
-            'permissions' => [
-                'nullable',
-                'array',
-            ],
-
-            'permissions.*' => [
-                'integer',
-                Rule::exists('permissions', 'id')
-                    ->where('guard_name', 'web'),
-            ],
-        ]);
-
-        $role->update([
-            'name' => $validated['name'],
-            'description' => $validated['description'] ?? null,
-        ]);
-
-        $permissionIds = $validated['permissions'] ?? [];
-
-        $permissionModels = Permission::query()
-            ->whereIn('id', $permissionIds)
-            ->where('guard_name', 'web')
-            ->get();
-
-        $role->syncPermissions($permissionModels);
+    public function update(
+        UpdateRoleRequest $request,
+        Role $role
+    ) {
+        $this->roleService->update(
+            $role,
+            $request->validated()
+        );
 
         return redirect()
             ->route('admin.roles.index')
-            ->with('success', 'Role berhasil diperbarui.');
+            ->with(
+                'success',
+                'Role berhasil diperbarui.'
+            );
     }
 
     /**
@@ -177,6 +114,7 @@ class RoleController extends BaseController
     public function destroy(Role $role)
     {
         try {
+
             if ($role->users()->exists()) {
                 return redirect()
                     ->back()
@@ -186,12 +124,17 @@ class RoleController extends BaseController
                     );
             }
 
-            $role->delete();
+            $this->roleService->delete($role);
 
             return redirect()
                 ->back()
-                ->with('success', 'Role berhasil dihapus.');
+                ->with(
+                    'success',
+                    'Role berhasil dihapus.'
+                );
+
         } catch (QueryException $e) {
+
             return redirect()
                 ->back()
                 ->with(
@@ -199,20 +142,5 @@ class RoleController extends BaseController
                     'Role tidak dapat dihapus karena masih digunakan.'
                 );
         }
-    }
-
-    /**
-     * Get all available permissions.
-     */
-    private function getPermissions()
-    {
-        return Permission::query()
-            ->where('guard_name', 'web')
-            ->orderBy('name')
-            ->get([
-                'id',
-                'name',
-                'guard_name',
-            ]);
     }
 }
