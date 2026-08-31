@@ -17,6 +17,7 @@ class PermissionSeeder extends Seeder
             ->forgetCachedPermissions();
 
         $permissions = [
+
             // Dashboard
             'dashboard.view',
 
@@ -42,8 +43,10 @@ class PermissionSeeder extends Seeder
             'queue.view',
             'queue.create',
             'queue.call',
+            'queue.recall',
             'queue.start',
             'queue.finish',
+            'queue.skip',
             'queue.cancel',
 
             // Monitor
@@ -53,13 +56,13 @@ class PermissionSeeder extends Seeder
             'report.view',
             'report.export',
 
-            //Role
+            // Role
             'role.view',
             'role.create',
             'role.update',
             'role.delete',
 
-            //Permission
+            // Permission
             'permission.view',
             'permission.create',
             'permission.update',
@@ -67,7 +70,7 @@ class PermissionSeeder extends Seeder
         ];
 
         $data = collect($permissions)
-            ->map(fn (string $permission) => [
+            ->map(fn(string $permission) => [
                 'name' => $permission,
                 'guard_name' => 'web',
             ])

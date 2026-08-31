@@ -34,6 +34,36 @@ Route::middleware(['auth'])
                 'store',
             ]);
 
+        Route::post('/queues/call', [
+            QueueController::class,
+            'call',
+        ])->name('queues.call');
+
+        Route::post('/queues/recall', [
+            QueueController::class,
+            'recall',
+        ])->name('queues.recall');
+
+        Route::post('/queues/start', [
+            QueueController::class,
+            'start',
+        ])->name('queues.start');
+
+        Route::post('/queues/finish', [
+            QueueController::class,
+            'finish',
+        ])->name('queues.finish');
+
+        Route::post('/queues/skip', [
+            QueueController::class,
+            'skip',
+        ])->name('queues.skip');
+
+        Route::post('/queues/{queue}/cancel', [
+            QueueController::class,
+            'cancel',
+        ])->name('queues.cancel');
+
         Route::resource('roles', RoleController::class)
             ->except(['show']);
 

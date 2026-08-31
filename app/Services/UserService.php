@@ -4,75 +4,117 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class UserService
 {
-    public function paginate(?string $search = null): LengthAwarePaginator
-    {
+    public function paginate(
+        ?string $search = null
+    ): LengthAwarePaginator {
         return User::query()
-
             ->with('roles')
-
-            ->when($search, function ($query) use ($search) {
-
-                $query
-
-                    ->where('name', 'ILIKE', "%{$search}%")
-
-                    ->orWhere('email', 'ILIKE', "%{$search}%")
-
-                    ->orWhereHas('roles', function ($q) use ($search) {
-
-                        $q->where('name', 'ILIKE', "%{$search}%");
-
+            ->when(
+                $search,
+                function ($query) use ($search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where(
+                            'name',
+                            'ILIKE',
+                            "%{$search}%"
+                        )
+                            ->orWhere(
+                                'username',
+                                'ILIKE',
+                                "%{$search}%"
+                            )
+                            ->orWhere(
+                                'email',
+                                'ILIKE',
+                                "%{$search}%"
+                            )
+                            ->orWhereHas(
+                                'roles',
+                                function ($roleQuery) use ($search) {
+                                    $roleQuery->where(
+                                        'name',
+                                        'ILIKE',
+                                        "%{$search}%"
+                                    );
+                                }
+                            );
                     });
-
-            })
-
+                }
+            )
             ->latest()
-
             ->paginate(10)
-
             ->withQueryString();
     }
 
     public function create(array $data): User
     {
-        $role = $data['role'];
+        return DB::transaction(
+            function () use ($data) {
+                $role = $data['role'];
 
-        unset($data['role']);
-        
-        $data['password'] = Hash::make($data['password']);
+                unset($data['role']);
 
-        $user = User::create($data);
+                if (
+                    !in_array(
+                        $role,
+                        ['teller', 'customer_service']
+                    )
+                ) {
+                    $data['counter_id'] = null;
+                }
 
-        $user->assignRole($role);
+                $data['password'] = Hash::make(
+                    $data['password']
+                );
 
-        return $user;
+                $user = User::create($data);
+
+                $user->assignRole($role);
+
+                return $user->refresh();
+            }
+        );
     }
 
-    public function update(User $user, array $data): User
-    {
-        $role = $data['role'];
+    public function update(
+        User $user,
+        array $data
+    ): User {
+        return DB::transaction(
+            function () use ($user, $data) {
+                $role = $data['role'];
 
-        unset($data['role']);
+                unset($data['role']);
 
-        if (!empty($data['password'])) {
+                if (
+                    !in_array(
+                        $role,
+                        ['teller', 'customer_service']
+                    )
+                ) {
+                    $data['counter_id'] = null;
+                }
 
-            $data['password'] = Hash::make($data['password']);
+                if (!empty($data['password'])) {
+                    $data['password'] = Hash::make(
+                        $data['password']
+                    );
+                } else {
+                    unset($data['password']);
+                }
 
-        } else {
+                $user->update($data);
 
-            unset($data['password']);
+                $user->syncRoles($role);
 
-        }
-
-        $user->update($data);
-
-        $user->syncRoles($role);
-
-        return $user->refresh();
+                return $user->refresh();
+            }
+        );
     }
 
     public function delete(User $user): void

@@ -17,7 +17,9 @@ class DashboardController extends BaseController
     {
         return inertia(
             'Admin/Dashboard',
-            $this->dashboardService->getDashboardData()
+            $this->dashboardService->getDashboardData(
+                request()->user()
+            )
         );
     }
 }

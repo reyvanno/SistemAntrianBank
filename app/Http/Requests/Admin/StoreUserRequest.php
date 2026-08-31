@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use App\Models\Counter;
 
 class StoreUserRequest extends FormRequest
 {
@@ -14,10 +16,21 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-
             'role' => [
                 'required',
                 'exists:roles,name',
+            ],
+
+            'counter_id' => [
+                'nullable',
+                'integer',
+                'exists:counters,id',
+                function ($attribute, $value, $fail) {
+                    $this->validateCounter(
+                        $value,
+                        $fail
+                    );
+                },
             ],
 
             'username' => [
@@ -49,8 +62,65 @@ class StoreUserRequest extends FormRequest
                 'required',
                 'boolean',
             ],
-
         ];
+    }
+
+    protected function validateCounter(
+        $counterId,
+        $fail
+    ): void {
+        $role = $this->input('role');
+
+        if (!$counterId) {
+            if (
+                in_array(
+                    $role,
+                    ['teller', 'customer_service']
+                )
+            ) {
+                $fail(
+                    'Loket wajib dipilih untuk role ini.'
+                );
+            }
+
+            return;
+        }
+
+        $counter = Counter::with('service')
+            ->find($counterId);
+
+        if (!$counter) {
+            return;
+        }
+
+        if (
+            $role === 'teller'
+            && $counter->service?->code !== 'A'
+        ) {
+            $fail(
+                'Teller hanya dapat ditempatkan pada loket Teller.'
+            );
+        }
+
+        if (
+            $role === 'customer_service'
+            && $counter->service?->code !== 'B'
+        ) {
+            $fail(
+                'Customer Service hanya dapat ditempatkan pada loket Customer Service.'
+            );
+        }
+
+        if (
+            !in_array(
+                $role,
+                ['teller', 'customer_service']
+            )
+        ) {
+            $fail(
+                'Role ini tidak dapat ditempatkan pada loket.'
+            );
+        }
     }
 
     public function messages(): array
@@ -58,6 +128,9 @@ class StoreUserRequest extends FormRequest
         return [
             'role.required' => 'Role wajib dipilih.',
             'role.exists' => 'Role yang dipilih tidak valid.',
+
+            'counter_id.exists' => 'Loket yang dipilih tidak valid.',
+            'counter_id.integer' => 'Loket tidak valid.',
 
             'username.required' => 'Username wajib diisi.',
             'username.max' => 'Username maksimal 50 karakter.',

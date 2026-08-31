@@ -7,10 +7,21 @@ use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
 
+/*
+|--------------------------------------------------------------------------
+| Monitor
+|--------------------------------------------------------------------------
+*/
+
 Route::get('/monitor', [
     MonitorController::class,
     'index',
 ])->name('monitor');
+
+Route::get('/monitor/data', [
+    MonitorController::class,
+    'data',
+])->name('monitor.data');
 
 /*
 |--------------------------------------------------------------------------

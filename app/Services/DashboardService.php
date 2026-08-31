@@ -4,53 +4,61 @@ namespace App\Services;
 
 use App\Models\Counter;
 use App\Models\Queue;
+use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
-    public function getDashboardData(): array
+    private const ACTIVE_QUEUE_STATUSES = [
+        'WAITING',
+        'CALLED',
+        'SERVING',
+    ];
+
+    private const COUNTER_QUEUE_STATUSES = [
+        'CALLED',
+        'SERVING',
+    ];
+
+    public function getDashboardData(?User $user = null): array
     {
+        $user ??= auth()->user();
+
         return [
-
-            'statistics' => $this->statistics(),
-
-            'activeQueues' => $this->activeQueues(),
-
-            'counterStatus' => $this->counterStatus(),
-
+            'statistics' => $this->statistics($user),
+            'activeQueues' => $this->activeQueues($user),
+            'counterStatus' => $this->counterStatus($user),
+            'myCounter' => $this->myCounter($user),
             'today' => now()->translatedFormat('l, d F Y'),
-
         ];
     }
 
-    private function statistics(): array
+    private function statistics(User $user): array
     {
-        $today = Carbon::today();
+        $query = Queue::query()
+            ->whereDate('created_at', Carbon::today());
 
-        $totalQueue = Queue::whereDate('created_at', $today)
+        $this->applyServiceScope(
+            $query,
+            $user
+        );
+
+        $total = (clone $query)->count();
+
+        $active = (clone $query)
+            ->whereIn(
+                'status',
+                self::ACTIVE_QUEUE_STATUSES
+            )
             ->count();
 
-        $activeQueue = Queue::whereDate('created_at', $today)
-            ->whereIn('status', [
-                'WAITING',
-                'CALLED',
-                'SERVING',
-            ])
-            ->count();
-
-        $finishedQueue = Queue::whereDate('created_at', $today)
+        $finished = (clone $query)
             ->where('status', 'FINISHED')
             ->count();
 
-        $averageTime = Queue::query()
-
-            ->whereDate('created_at', $today)
-
+        $average = (clone $query)
             ->whereNotNull('started_at')
-
             ->whereNotNull('finished_at')
-
             ->selectRaw("
                 AVG(
                     EXTRACT(
@@ -58,70 +66,196 @@ class DashboardService
                             finished_at - started_at
                         )
                     ) / 60
-                ) as avg_time
+                ) AS avg_time
             ")
-
             ->value('avg_time');
 
         return [
-
-            'total' => $totalQueue,
-
-            'active' => $activeQueue,
-
-            'finished' => $finishedQueue,
-
-            'average' => round($averageTime ?? 0),
-
+            'total' => $total,
+            'active' => $active,
+            'finished' => $finished,
+            'average' => round($average ?? 0),
         ];
     }
 
-    private function activeQueues()
+    private function activeQueues(User $user)
     {
-        return Queue::query()
-
+        $query = Queue::query()
             ->with([
-                'service',
-                'counter',
+                'service:id,code,name',
+                'counter:id,service_id,code,name',
             ])
+            ->whereDate('created_at', Carbon::today())
+            ->whereIn(
+                'status',
+                self::ACTIVE_QUEUE_STATUSES
+            )
+            ->oldest('id');
 
-            ->whereIn('status', [
-                'WAITING',
-                'CALLED',
-                'SERVING',
-            ])
+        $this->applyServiceScope(
+            $query,
+            $user
+        );
 
-            ->oldest()
-
+        return $query
             ->take(10)
-
             ->get();
     }
 
-    private function counterStatus()
+    private function counterStatus(User $user)
     {
-        return Counter::query()
-
+        $query = Counter::query()
             ->with([
-                'service',
+                'service:id,code,name',
+
                 'queues' => function ($query) {
-
                     $query
-
                         ->whereIn(
                             'status',
-                        [
-                            'CALLED',
-                            'SERVING',
-                        ])
-
-                        ->latest();
-
+                            self::COUNTER_QUEUE_STATUSES
+                        )
+                        ->latest('updated_at');
                 },
             ])
+            ->orderBy('code');
 
-            ->orderBy('code')
+        $this->applyServiceScope(
+            $query,
+            $user
+        );
 
-            ->get();
+        return $query
+            ->get()
+            ->map(function (Counter $counter) {
+
+                $activeQueue = $counter->queues->first();
+
+                if (!$counter->is_active) {
+                    $status = 'INACTIVE';
+                } elseif (!$activeQueue) {
+                    $status = 'AVAILABLE';
+                } elseif ($activeQueue->status === 'SERVING') {
+                    $status = 'SERVING';
+                } else {
+                    $status = 'CALLED';
+                }
+
+                return [
+                    'id' => $counter->id,
+                    'code' => $counter->code,
+                    'name' => $counter->name,
+                    'is_active' => $counter->is_active,
+
+                    'service' => [
+                        'id' => $counter->service?->id,
+                        'code' => $counter->service?->code,
+                        'name' => $counter->service?->name,
+                    ],
+
+                    'status' => $status,
+
+                    'queue' => $activeQueue
+                        ? [
+                            'id' => $activeQueue->id,
+                            'queue_number' => $activeQueue->queue_number,
+                            'status' => $activeQueue->status,
+                            'call_count' => $activeQueue->call_count,
+                        ]
+                        : null,
+                ];
+            })
+            ->values();
+    }
+
+    private function myCounter(User $user): ?array
+    {
+        if ($user->hasRole('admin')) {
+            return null;
+        }
+
+        $counter = $user->counter()
+            ->with('service')
+            ->first();
+
+        if (!$counter) {
+            return null;
+        }
+
+        /*
+         * Cari queue aktif yang sedang berada
+         * pada loket milik user.
+         */
+        $queue = Queue::query()
+            ->with([
+                'service:id,code,name',
+                'counter:id,service_id,code,name',
+            ])
+            ->where('counter_id', $counter->id)
+            ->whereIn(
+                'status',
+                self::COUNTER_QUEUE_STATUSES
+            )
+            ->latest('updated_at')
+            ->first();
+
+        if (!$counter->is_active) {
+            $status = 'INACTIVE';
+        } elseif (!$queue) {
+            $status = 'AVAILABLE';
+        } elseif ($queue->status === 'SERVING') {
+            $status = 'SERVING';
+        } else {
+            $status = 'CALLED';
+        }
+
+        return [
+            'id' => $counter->id,
+            'code' => $counter->code,
+            'name' => $counter->name,
+            'is_active' => $counter->is_active,
+
+            'status' => $status,
+
+            'service' => [
+                'id' => $counter->service?->id,
+                'code' => $counter->service?->code,
+                'name' => $counter->service?->name,
+            ],
+
+            'queue' => $queue
+                ? [
+                    'id' => $queue->id,
+                    'queue_number' => $queue->queue_number,
+                    'status' => $queue->status,
+                    'call_count' => $queue->call_count,
+                ]
+                : null,
+        ];
+    }
+
+    /**
+     * Admin melihat seluruh service.
+     *
+     * Teller / CS hanya melihat service
+     * yang terhubung dengan loketnya.
+     */
+    private function applyServiceScope(
+        $query,
+        User $user
+    ): void {
+        if ($user->hasRole('admin')) {
+            return;
+        }
+
+        $serviceId = $user->counter?->service_id;
+
+        if ($serviceId) {
+            $query->where(
+                'service_id',
+                $serviceId
+            );
+        } else {
+            $query->whereRaw('1 = 0');
+        }
     }
 }

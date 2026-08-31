@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use Spatie\Permission\Models\Role;
 use App\Models\User;
+use App\Models\Counter;
 use App\Services\UserService;
 use Illuminate\Database\QueryException;
 
@@ -16,16 +17,16 @@ class UserController extends BaseController
         protected UserService $userService
     ) {
         $this->middleware('permission:user.view')
-        ->only('index');
+            ->only('index');
 
         $this->middleware('permission:user.create')
-        ->only(['create', 'store']);
+            ->only(['create', 'store']);
 
         $this->middleware('permission:user.update')
-        ->only(['edit', 'update']);
+            ->only(['edit', 'update']);
 
         $this->middleware('permission:user.delete')
-        ->only('destroy');
+            ->only('destroy');
     }
 
     public function index()
@@ -45,8 +46,14 @@ class UserController extends BaseController
     {
         return inertia('Admin/Users/Create', [
             'roles' => Role::query()
-                ->select('id','name')
+                ->select('id', 'name')
                 ->orderBy('name')
+                ->get(),
+
+            'counters' => Counter::query()
+                ->with('service:id,code,name')
+                ->where('is_active', true)
+                ->orderBy('code')
                 ->get(),
         ]);
     }
@@ -65,10 +72,17 @@ class UserController extends BaseController
     public function edit(User $user)
     {
         return inertia('Admin/Users/Edit', [
-            'user' => $user->load('roles', 'counter'),
+            'user' => $user->load('roles', 'counter.service'),
+
             'roles' => Role::query()
-                ->select('id','name')
-                ->  orderBy('name')
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get(),
+
+            'counters' => Counter::query()
+                ->with('service:id,code,name')
+                ->where('is_active', true)
+                ->orderBy('code')
                 ->get(),
         ]);
     }
@@ -90,7 +104,6 @@ class UserController extends BaseController
     public function destroy(User $user)
     {
         try {
-
             $this->userService->delete($user);
 
             return redirect()
@@ -98,14 +111,12 @@ class UserController extends BaseController
                 ->with('success', 'User berhasil dihapus.');
 
         } catch (QueryException $e) {
-
             return redirect()
                 ->back()
                 ->with(
                     'error',
                     'User tidak dapat dihapus karena masih digunakan.'
                 );
-
         }
     }
 }

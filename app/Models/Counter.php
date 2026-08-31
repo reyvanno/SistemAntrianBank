@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Counter extends Model
 {
@@ -12,18 +14,25 @@ class Counter extends Model
         'name',
         'is_active',
     ];
-    
-    public function service()
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
+
+    public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
     }
 
-    public function queues()
+    public function queues(): HasMany
     {
         return $this->hasMany(Queue::class);
     }
 
-    public function users()
+    public function users(): HasMany
     {
         return $this->hasMany(User::class);
     }
