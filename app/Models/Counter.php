@@ -24,16 +24,22 @@ class Counter extends Model
 
     public function service(): BelongsTo
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(
+            Service::class
+        );
     }
 
     public function queues(): HasMany
     {
-        return $this->hasMany(Queue::class);
+        return $this->hasMany(
+            Queue::class
+        );
     }
 
     public function users(): HasMany
     {
-        return $this->hasMany(User::class);
+        return $this->hasMany(
+            User::class
+        );
     }
 }

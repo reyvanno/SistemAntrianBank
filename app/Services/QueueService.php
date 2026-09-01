@@ -35,11 +35,40 @@ class QueueService
     ];
 
     /**
-     * Menampilkan daftar antrian untuk admin.
+     * Status yang ditampilkan pada halaman
+     * antrian Teller / Customer Service.
      */
-    public function paginate(?string $search = null): LengthAwarePaginator
-    {
-        return Queue::query()
+    private const STAFF_VISIBLE_STATUSES = [
+        'WAITING',
+        'CALLED',
+        'SERVING',
+        'FINISHED',
+        'CANCELLED',
+        'SKIPPED',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | INDEX / LIST
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Menampilkan daftar antrian untuk admin/staff.
+     *
+     * ADMIN:
+     *     - semua service
+     *     - semua status
+     *
+     * TELLER / CS:
+     *     - hanya service counter sendiri
+     *     - hanya WAITING, FINISHED, CANCELLED
+     */
+    public function paginate(
+        User $user,
+        ?string $search = null
+    ): LengthAwarePaginator {
+        $query = Queue::query()
             ->with([
                 'service:id,code,name',
                 'counter:id,service_id,code,name',
@@ -55,9 +84,158 @@ class QueueService
                     );
                 }
             )
-            ->latest('id')
+            ->latest('id');
+
+        /*
+         * ADMIN
+         *
+         * Admin dapat melihat seluruh
+         * service dan seluruh status.
+         */
+        if ($user->hasRole('admin')) {
+            return $query
+                ->paginate(10)
+                ->withQueryString();
+        }
+
+        /*
+         * Ambil service dari counter user.
+         */
+        $serviceId = $user->counter?->service_id;
+
+        /*
+         * Kalau user tidak mempunyai counter,
+         * jangan tampilkan data apa pun.
+         */
+        if (!$serviceId) {
+            $query->whereRaw('1 = 0');
+
+            return $query
+                ->paginate(10)
+                ->withQueryString();
+        }
+
+        /*
+         * Batasi berdasarkan service.
+         */
+        $query->where(
+            'service_id',
+            $serviceId
+        );
+
+        /*
+         * Teller / CS hanya melihat:
+         *
+         * WAITING
+         * FINISHED
+         * CANCELLED
+         */
+        $query->whereIn(
+            'status',
+            self::STAFF_VISIBLE_STATUSES
+        );
+
+        return $query
             ->paginate(10)
             ->withQueryString();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | AVAILABLE SERVICES
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Service yang boleh digunakan user
+     * untuk membuat nomor antrian.
+     *
+     * ADMIN:
+     *     semua service.
+     *
+     * TELLER / CS:
+     *     hanya service counter sendiri.
+     */
+    public function availableServices(
+        User $user
+    ) {
+        $query = Service::query()
+            ->orderBy('name');
+
+        /*
+         * Admin boleh melihat semua service.
+         */
+        if ($user->hasRole('admin')) {
+            return $query->get([
+                'id',
+                'code',
+                'name',
+            ]);
+        }
+
+        /*
+         * User biasa hanya boleh
+         * menggunakan service counter-nya.
+         */
+        $serviceId = $user->counter?->service_id;
+
+        if (!$serviceId) {
+            return collect();
+        }
+
+        return $query
+            ->whereKey($serviceId)
+            ->get([
+                'id',
+                'code',
+                'name',
+            ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Membuat queue dengan validasi
+     * berdasarkan user.
+     */
+    public function createForUser(
+        User $user,
+        array $data
+    ): Queue {
+        /*
+         * Admin bebas membuat queue
+         * untuk service mana pun.
+         */
+        if ($user->hasRole('admin')) {
+            return $this->create($data);
+        }
+
+        /*
+         * User non-admin harus mempunyai counter.
+         */
+        $serviceId = $user->counter?->service_id;
+
+        if (!$serviceId) {
+            throw new \RuntimeException(
+                'Anda belum memiliki loket.'
+            );
+        }
+
+        /*
+         * Pastikan service yang dikirim
+         * sama dengan service counter user.
+         */
+        if ((int) $data['service_id'] !== (int) $serviceId) {
+            throw new \RuntimeException(
+                'Anda tidak dapat membuat antrian untuk layanan lain.'
+            );
+        }
+
+        return $this->create($data);
     }
 
     /**
@@ -81,8 +259,14 @@ class QueueService
             $today = Carbon::today();
 
             $lastQueue = Queue::query()
-                ->where('service_id', $service->id)
-                ->whereDate('created_at', $today)
+                ->where(
+                    'service_id',
+                    $service->id
+                )
+                ->whereDate(
+                    'created_at',
+                    $today
+                )
                 ->orderByDesc('id')
                 ->lockForUpdate()
                 ->first();
@@ -128,6 +312,12 @@ class QueueService
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | CALL NEXT
+    |--------------------------------------------------------------------------
+    */
+
     /**
      * Memanggil nomor berikutnya.
      *
@@ -144,7 +334,10 @@ class QueueService
              * satu queue aktif.
              */
             $activeQueue = Queue::query()
-                ->where('counter_id', $counter->id)
+                ->where(
+                    'counter_id',
+                    $counter->id
+                )
                 ->whereIn(
                     'status',
                     self::COUNTER_ACTIVE_STATUSES
@@ -163,9 +356,18 @@ class QueueService
              * dari service loket.
              */
             $queue = Queue::query()
-                ->where('service_id', $counter->service_id)
-                ->whereDate('created_at', Carbon::today())
-                ->where('status', 'WAITING')
+                ->where(
+                    'service_id',
+                    $counter->service_id
+                )
+                ->whereDate(
+                    'created_at',
+                    Carbon::today()
+                )
+                ->where(
+                    'status',
+                    'WAITING'
+                )
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->first();
@@ -199,6 +401,12 @@ class QueueService
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | RECALL
+    |--------------------------------------------------------------------------
+    */
+
     /**
      * Memanggil ulang queue.
      *
@@ -213,13 +421,17 @@ class QueueService
                 ['CALLED']
             );
 
-            if ($queue->call_count >= self::MAX_CALL_COUNT) {
+            if (
+                $queue->call_count >=
+                self::MAX_CALL_COUNT
+            ) {
                 throw new \RuntimeException(
                     'Antrian sudah mencapai batas maksimal 3 kali pemanggilan.'
                 );
             }
 
-            $newCallCount = $queue->call_count + 1;
+            $newCallCount =
+                $queue->call_count + 1;
 
             $queue->update([
                 'call_count' => $newCallCount,
@@ -240,6 +452,12 @@ class QueueService
             ]);
         });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | START
+    |--------------------------------------------------------------------------
+    */
 
     /**
      * Memulai pelayanan.
@@ -275,6 +493,12 @@ class QueueService
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | FINISH
+    |--------------------------------------------------------------------------
+    */
+
     /**
      * Menyelesaikan pelayanan.
      *
@@ -309,12 +533,16 @@ class QueueService
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | SKIP
+    |--------------------------------------------------------------------------
+    */
+
     /**
      * Melewati antrian.
      *
      * CALLED -> SKIPPED
-     *
-     * Hanya setelah 3 kali pemanggilan.
      */
     public function skip(User $user): Queue
     {
@@ -325,7 +553,10 @@ class QueueService
                 ['CALLED']
             );
 
-            if ($queue->call_count < self::MAX_CALL_COUNT) {
+            if (
+                $queue->call_count <
+                self::MAX_CALL_COUNT
+            ) {
                 throw new \RuntimeException(
                     'Antrian belum mencapai 3 kali pemanggilan.'
                 );
@@ -350,61 +581,149 @@ class QueueService
         });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | CANCEL
+    |--------------------------------------------------------------------------
+    */
+
     /**
-     * Membatalkan antrian yang masih menunggu.
+     * Membatalkan antrian.
      *
      * WAITING -> CANCELLED
+     *
+     * SECURITY:
+     *
+     * Admin:
+     *     boleh membatalkan semua service.
+     *
+     * Teller / CS:
+     *     hanya boleh membatalkan queue
+     *     dari service counter mereka.
      */
-    public function cancel(User $user, int $queueId): Queue
-    {
-        return DB::transaction(function () use ($user, $queueId) {
+    public function cancel(
+        User $user,
+        int $queueId
+    ): Queue {
+        return DB::transaction(
+            function () use ($user, $queueId) {
 
-            $queue = Queue::query()
-                ->with([
+                $queue = Queue::query()
+                    ->with([
+                        'service',
+                        'counter',
+                        'handledBy',
+                    ])
+                    ->whereKey($queueId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$queue) {
+                    throw new \RuntimeException(
+                        'Antrian tidak ditemukan.'
+                    );
+                }
+
+                /*
+                 * Hanya WAITING yang dapat dibatalkan.
+                 */
+                if ($queue->status !== 'WAITING') {
+                    throw new \RuntimeException(
+                        'Hanya antrian yang masih menunggu yang dapat dibatalkan.'
+                    );
+                }
+
+                /*
+                 * ADMIN
+                 *
+                 * Admin boleh membatalkan queue
+                 * dari service mana pun.
+                 */
+                if ($user->hasRole('admin')) {
+
+                    $queue->update([
+                        'status' => 'CANCELLED',
+                    ]);
+
+                    $this->log(
+                        $queue,
+                        'CANCELLED',
+                        $user->id,
+                        "Nomor {$queue->queue_number} dibatalkan."
+                    );
+
+                    return $queue->fresh([
+                        'service',
+                        'counter',
+                        'handledBy',
+                    ]);
+                }
+
+                /*
+                 * NON-ADMIN
+                 *
+                 * Ambil service dari counter user.
+                 */
+                $serviceId =
+                    $user->counter?->service_id;
+
+                if (!$serviceId) {
+                    throw new \RuntimeException(
+                        'Anda belum memiliki loket.'
+                    );
+                }
+
+                /*
+                 * SECURITY CHECK UTAMA
+                 *
+                 * Queue harus berasal dari
+                 * service yang sama dengan counter user.
+                 */
+                if (
+                    (int) $queue->service_id !==
+                    (int) $serviceId
+                ) {
+                    throw new \RuntimeException(
+                        'Anda tidak memiliki akses untuk membatalkan antrian layanan ini.'
+                    );
+                }
+
+                /*
+                 * Kalau lolos semua pengecekan,
+                 * baru boleh dibatalkan.
+                 */
+                $queue->update([
+                    'status' => 'CANCELLED',
+                ]);
+
+                $this->log(
+                    $queue,
+                    'CANCELLED',
+                    $user->id,
+                    "Nomor {$queue->queue_number} dibatalkan oleh {$user->name}."
+                );
+
+                return $queue->fresh([
                     'service',
                     'counter',
                     'handledBy',
-                ])
-                ->whereKey($queueId)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$queue) {
-                throw new \RuntimeException(
-                    'Antrian tidak ditemukan.'
-                );
+                ]);
             }
-
-            if ($queue->status !== 'WAITING') {
-                throw new \RuntimeException(
-                    'Hanya antrian yang masih menunggu yang dapat dibatalkan.'
-                );
-            }
-
-            $queue->update([
-                'status' => 'CANCELLED',
-            ]);
-
-            $this->log(
-                $queue,
-                'CANCELLED',
-                $user->id,
-                "Nomor {$queue->queue_number} dibatalkan."
-            );
-
-            return $queue->fresh([
-                'service',
-                'counter',
-                'handledBy',
-            ]);
-        });
+        );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACTIVE COUNTER
+    |--------------------------------------------------------------------------
+    */
 
     /**
      * Mengambil counter aktif milik user.
      */
-    private function getActiveCounter(User $user): Counter
-    {
+    private function getActiveCounter(
+        User $user
+    ): Counter {
         $counter = $user->counter()
             ->with('service')
             ->lockForUpdate()
@@ -425,6 +744,12 @@ class QueueService
         return $counter;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | ACTIVE QUEUE
+    |--------------------------------------------------------------------------
+    */
+
     /**
      * Mengambil queue aktif milik user.
      */
@@ -432,7 +757,9 @@ class QueueService
         User $user,
         array $statuses
     ): Queue {
-        $counter = $this->getActiveCounter($user);
+        $counter = $this->getActiveCounter(
+            $user
+        );
 
         $queue = Queue::query()
             ->with([
@@ -440,9 +767,18 @@ class QueueService
                 'counter',
                 'handledBy',
             ])
-            ->where('counter_id', $counter->id)
-            ->where('handled_by', $user->id)
-            ->whereIn('status', $statuses)
+            ->where(
+                'counter_id',
+                $counter->id
+            )
+            ->where(
+                'handled_by',
+                $user->id
+            )
+            ->whereIn(
+                'status',
+                $statuses
+            )
             ->lockForUpdate()
             ->first();
 
@@ -454,6 +790,12 @@ class QueueService
 
         return $queue;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | LOG
+    |--------------------------------------------------------------------------
+    */
 
     /**
      * Membuat audit log queue.

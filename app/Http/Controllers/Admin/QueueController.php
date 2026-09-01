@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use Illuminate\Routing\Controller as BaseController;
 use App\Http\Requests\Admin\StoreQueueRequest;
-use App\Models\Service;
 use App\Services\QueueService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -16,7 +16,10 @@ class QueueController extends BaseController
         protected QueueService $queueService
     ) {
         $this->middleware('permission:queue.view')
-            ->only('index');
+            ->only([
+                'index',
+                'data',
+            ]);
 
         $this->middleware('permission:queue.create')
             ->only('store');
@@ -40,35 +43,110 @@ class QueueController extends BaseController
             ->only('cancel');
     }
 
-    public function index()
+    /*
+    |--------------------------------------------------------------------------
+    | INDEX
+    |--------------------------------------------------------------------------
+    */
+
+    public function index(Request $request)
     {
+        $user = $request->user();
+
+        $start = microtime(true);
+
+        $queues = $this->queueService->paginate(
+            $user,
+            $request->input('search')
+        );
+
+        $paginateTime = microtime(true) - $start;
+
+        $start = microtime(true);
+
+        $services = $this->queueService->availableServices($user);
+
+        $servicesTime = microtime(true) - $start;
+
         return inertia(
             'Admin/Queues/Index',
             [
-                'queues' => $this->queueService->paginate(
-                    request('search')
-                ),
+                'queues' => $queues,
 
-                'services' => Service::query()
-                    ->orderBy('name')
-                    ->get([
-                        'id',
-                        'code',
-                        'name',
-                    ]),
+                'services' => $services,
 
                 'filters' => [
-                    'search' => request('search'),
+                    'search' => $request->input('search'),
                 ],
             ]
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | REALTIME DATA
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Mengambil data antrian terbaru.
+     *
+     * Endpoint ini dipanggil oleh Vue
+     * setiap 1.5 detik.
+     *
+     * Tidak melakukan reload halaman.
+     */
+    public function data(Request $request): JsonResponse
+    {
+        $totalStart = microtime(true);
+
+        $userStart = microtime(true);
+
+        $user = $request->user();
+
+        $userTime = microtime(true) - $userStart;
+
+        $queueStart = microtime(true);
+
+        $queues = $this->queueService->paginate(
+            $user,
+            $request->input('search')
+        );
+
+        $queueTime = microtime(true) - $queueStart;
+
+        $responseStart = microtime(true);
+
+        $response = response()->json([
+            'queues' => $queues,
+        ]);
+
+        $responseTime = microtime(true) - $responseStart;
+
+        $totalTime = microtime(true) - $totalStart;
+
+        logger()->info('QUEUE DATA PERFORMANCE', [
+            'user' => round($userTime * 1000, 2),
+            'paginate' => round($queueTime * 1000, 2),
+            'response' => round($responseTime * 1000, 2),
+            'total' => round($totalTime * 1000, 2),
+        ]);
+
+        return $response;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STORE
+    |--------------------------------------------------------------------------
+    */
+
     public function store(
         StoreQueueRequest $request
     ): RedirectResponse {
         try {
-            $queue = $this->queueService->create(
+            $queue = $this->queueService->createForUser(
+                $request->user(),
                 $request->validated()
             );
 
@@ -87,6 +165,12 @@ class QueueController extends BaseController
                 );
         }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CALL
+    |--------------------------------------------------------------------------
+    */
 
     public function call(
         Request $request
@@ -112,6 +196,12 @@ class QueueController extends BaseController
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | RECALL
+    |--------------------------------------------------------------------------
+    */
+
     public function recall(
         Request $request
     ): RedirectResponse {
@@ -135,6 +225,12 @@ class QueueController extends BaseController
                 );
         }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | START
+    |--------------------------------------------------------------------------
+    */
 
     public function start(
         Request $request
@@ -160,6 +256,12 @@ class QueueController extends BaseController
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | FINISH
+    |--------------------------------------------------------------------------
+    */
+
     public function finish(
         Request $request
     ): RedirectResponse {
@@ -184,6 +286,12 @@ class QueueController extends BaseController
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | SKIP
+    |--------------------------------------------------------------------------
+    */
+
     public function skip(
         Request $request
     ): RedirectResponse {
@@ -207,6 +315,12 @@ class QueueController extends BaseController
                 );
         }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CANCEL
+    |--------------------------------------------------------------------------
+    */
 
     public function cancel(
         Request $request,

@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Model;
 
 class Queue extends Model
 {
@@ -42,7 +42,10 @@ class Queue extends Model
 
     public function handledBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'handled_by');
+        return $this->belongsTo(
+            User::class,
+            'handled_by'
+        );
     }
 
     public function logs(): HasMany

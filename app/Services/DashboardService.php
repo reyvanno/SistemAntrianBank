@@ -6,6 +6,7 @@ use App\Models\Counter;
 use App\Models\Queue;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Redis;
 
 class DashboardService
 {
@@ -20,6 +21,14 @@ class DashboardService
         'SERVING',
     ];
 
+    /**
+     * Presence dianggap online selama TTL ini.
+     */
+    private const PRESENCE_TTL = 90;
+
+    /**
+     * Ambil seluruh data dashboard.
+     */
     public function getDashboardData(?User $user = null): array
     {
         $user ??= auth()->user();
@@ -33,10 +42,19 @@ class DashboardService
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Statistics
+    |--------------------------------------------------------------------------
+    */
+
     private function statistics(User $user): array
     {
         $query = Queue::query()
-            ->whereDate('created_at', Carbon::today());
+            ->whereDate(
+                'created_at',
+                Carbon::today()
+            );
 
         $this->applyServiceScope(
             $query,
@@ -53,7 +71,10 @@ class DashboardService
             ->count();
 
         $finished = (clone $query)
-            ->where('status', 'FINISHED')
+            ->where(
+                'status',
+                'FINISHED'
+            )
             ->count();
 
         $average = (clone $query)
@@ -78,6 +99,12 @@ class DashboardService
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Active Queues
+    |--------------------------------------------------------------------------
+    */
+
     private function activeQueues(User $user)
     {
         $query = Queue::query()
@@ -85,7 +112,10 @@ class DashboardService
                 'service:id,code,name',
                 'counter:id,service_id,code,name',
             ])
-            ->whereDate('created_at', Carbon::today())
+            ->whereDate(
+                'created_at',
+                Carbon::today()
+            )
             ->whereIn(
                 'status',
                 self::ACTIVE_QUEUE_STATUSES
@@ -102,12 +132,27 @@ class DashboardService
             ->get();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Counter Status
+    |--------------------------------------------------------------------------
+    */
+
     private function counterStatus(User $user)
     {
         $query = Counter::query()
             ->with([
                 'service:id,code,name',
 
+                /*
+                 * Semua petugas yang terhubung
+                 * dengan counter.
+                 */
+                'users:id,counter_id,name,is_active',
+
+                /*
+                 * Queue aktif pada counter.
+                 */
                 'queues' => function ($query) {
                     $query
                         ->whereIn(
@@ -128,27 +173,98 @@ class DashboardService
             ->get()
             ->map(function (Counter $counter) {
 
+                /*
+                 * Queue aktif terbaru.
+                 */
                 $activeQueue = $counter->queues->first();
 
-                if (!$counter->is_active) {
+                /*
+                 * Semua user aktif secara database.
+                 */
+                $activeStaff = $counter->users
+                    ->filter(
+                        fn(User $staff) =>
+                        $staff->is_active
+                    );
+
+                /*
+                 * Dari user aktif tersebut,
+                 * cek siapa yang benar-benar mempunyai
+                 * presence di Redis.
+                 */
+                $onlineUsers = $activeStaff
+                    ->filter(
+                        fn(User $staff) =>
+                        $this->isUserOnline(
+                            $staff->id
+                        )
+                    );
+
+                $staffCount = $activeStaff->count();
+
+                $onlineStaffCount = $onlineUsers->count();
+
+                /*
+                 * ------------------------------------------------------
+                 * Tentukan status counter
+                 * ------------------------------------------------------
+                 *
+                 * 0 online
+                 *      = INACTIVE
+                 *
+                 * >=1 online + tidak ada queue
+                 *      = AVAILABLE
+                 *
+                 * >=1 online + CALLED
+                 *      = CALLED
+                 *
+                 * >=1 online + SERVING
+                 *      = SERVING
+                 *
+                 */
+
+                if (
+                    !$counter->is_active ||
+                    $onlineStaffCount === 0
+                ) {
                     $status = 'INACTIVE';
-                } elseif (!$activeQueue) {
-                    $status = 'AVAILABLE';
-                } elseif ($activeQueue->status === 'SERVING') {
-                    $status = 'SERVING';
+
+                } elseif ($activeQueue) {
+
+                    $status =
+                        $activeQueue->status === 'SERVING'
+                        ? 'SERVING'
+                        : 'CALLED';
+
                 } else {
-                    $status = 'CALLED';
+
+                    $status = 'AVAILABLE';
                 }
 
                 return [
                     'id' => $counter->id,
+
                     'code' => $counter->code,
+
                     'name' => $counter->name,
+
                     'is_active' => $counter->is_active,
+
+                    /*
+                     * Jumlah petugas aktif di database.
+                     */
+                    'staff_count' => $staffCount,
+
+                    /*
+                     * Jumlah petugas yang benar-benar online.
+                     */
+                    'online_staff_count' => $onlineStaffCount,
 
                     'service' => [
                         'id' => $counter->service?->id,
+
                         'code' => $counter->service?->code,
+
                         'name' => $counter->service?->name,
                     ],
 
@@ -156,10 +272,17 @@ class DashboardService
 
                     'queue' => $activeQueue
                         ? [
-                            'id' => $activeQueue->id,
-                            'queue_number' => $activeQueue->queue_number,
-                            'status' => $activeQueue->status,
-                            'call_count' => $activeQueue->call_count,
+                            'id' =>
+                                $activeQueue->id,
+
+                            'queue_number' =>
+                                $activeQueue->queue_number,
+
+                            'status' =>
+                                $activeQueue->status,
+
+                            'call_count' =>
+                                $activeQueue->call_count,
                         ]
                         : null,
                 ];
@@ -167,12 +290,24 @@ class DashboardService
             ->values();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | My Counter
+    |--------------------------------------------------------------------------
+    */
+
     private function myCounter(User $user): ?array
     {
+        /*
+         * Admin tidak mempunyai counter sendiri.
+         */
         if ($user->hasRole('admin')) {
             return null;
         }
 
+        /*
+         * Ambil counter milik user.
+         */
         $counter = $user->counter()
             ->with('service')
             ->first();
@@ -182,15 +317,22 @@ class DashboardService
         }
 
         /*
-         * Cari queue aktif yang sedang berada
-         * pada loket milik user.
+         * Queue yang sedang ditangani
+         * oleh user ini.
          */
         $queue = Queue::query()
             ->with([
                 'service:id,code,name',
                 'counter:id,service_id,code,name',
             ])
-            ->where('counter_id', $counter->id)
+            ->where(
+                'counter_id',
+                $counter->id
+            )
+            ->where(
+                'handled_by',
+                $user->id
+            )
             ->whereIn(
                 'status',
                 self::COUNTER_QUEUE_STATUSES
@@ -198,64 +340,131 @@ class DashboardService
             ->latest('updated_at')
             ->first();
 
-        if (!$counter->is_active) {
+        /*
+         * User dianggap online jika:
+         *
+         * 1. user aktif
+         * 2. counter aktif
+         * 3. Redis presence masih ada
+         */
+        $isOnline =
+            $user->is_active &&
+            $counter->is_active &&
+            $this->isUserOnline(
+                $user->id
+            );
+
+        /*
+         * Tentukan status My Counter.
+         */
+        if (!$isOnline) {
+
             $status = 'INACTIVE';
-        } elseif (!$queue) {
-            $status = 'AVAILABLE';
-        } elseif ($queue->status === 'SERVING') {
-            $status = 'SERVING';
+
+        } elseif ($queue) {
+
+            $status =
+                $queue->status === 'SERVING'
+                ? 'SERVING'
+                : 'CALLED';
+
         } else {
-            $status = 'CALLED';
+
+            $status = 'AVAILABLE';
         }
 
         return [
             'id' => $counter->id,
+
             'code' => $counter->code,
+
             'name' => $counter->name,
+
             'is_active' => $counter->is_active,
 
-            'status' => $status,
+            'online' => $isOnline,
 
             'service' => [
                 'id' => $counter->service?->id,
+
                 'code' => $counter->service?->code,
+
                 'name' => $counter->service?->name,
             ],
 
+            'status' => $status,
+
             'queue' => $queue
                 ? [
-                    'id' => $queue->id,
-                    'queue_number' => $queue->queue_number,
-                    'status' => $queue->status,
-                    'call_count' => $queue->call_count,
+                    'id' =>
+                        $queue->id,
+
+                    'queue_number' =>
+                        $queue->queue_number,
+
+                    'status' =>
+                        $queue->status,
+
+                    'call_count' =>
+                        $queue->call_count,
                 ]
                 : null,
         ];
     }
 
-    /**
-     * Admin melihat seluruh service.
-     *
-     * Teller / CS hanya melihat service
-     * yang terhubung dengan loketnya.
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | Presence
+    |--------------------------------------------------------------------------
+    */
+
+    private function isUserOnline(int $userId): bool
+    {
+        return (bool) Redis::exists(
+            $this->presenceKey($userId)
+        );
+    }
+
+    private function presenceKey(int $userId): string
+    {
+        return "counter_presence:user:{$userId}";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Service Scope
+    |--------------------------------------------------------------------------
+    */
+
     private function applyServiceScope(
         $query,
         User $user
     ): void {
+        /*
+         * Admin melihat semua service.
+         */
         if ($user->hasRole('admin')) {
             return;
         }
 
+        /*
+         * Teller / CS hanya melihat service
+         * yang dimiliki counter-nya.
+         */
         $serviceId = $user->counter?->service_id;
 
         if ($serviceId) {
+
             $query->where(
                 'service_id',
                 $serviceId
             );
+
         } else {
-            $query->whereRaw('1 = 0');
+
+            $query->whereRaw(
+                '1 = 0'
+            );
         }
     }
 }

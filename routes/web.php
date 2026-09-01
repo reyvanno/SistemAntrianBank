@@ -39,6 +39,11 @@ Route::post('/ambil-nomor', [
     'store',
 ])->name('customer.queue.store');
 
+Route::get('/ambil-nomor/{queue}/pdf', [
+    QueueController::class,
+    'pdf',
+])->name('customer.queue.pdf');
+
 /*
 |--------------------------------------------------------------------------
 | Authenticated User

@@ -1,6 +1,6 @@
 <script setup>
 import { Head } from "@inertiajs/vue3";
-import { onMounted, onUnmounted, computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 
 import MonitorNavbar from "@/Components/Layout/MonitorNavbar.vue";
 import CounterCard from "@/Components/Monitor/CounterCard.vue";
@@ -25,7 +25,7 @@ const props = defineProps({
 
 /*
 |--------------------------------------------------------------------------
-| Reactive Monitor Data
+| REACTIVE MONITOR DATA
 |--------------------------------------------------------------------------
 */
 
@@ -35,43 +35,58 @@ const latestCall = ref(props.latestCall);
 
 /*
 |--------------------------------------------------------------------------
-| Voice State
+| VOICE
 |--------------------------------------------------------------------------
 */
 
 const voiceEnabled = ref(false);
 const isSpeaking = ref(false);
 
+/*
+ * Audio notifikasi.
+ *
+ * File:
+ *
+ * public/sounds/notification.mp3
+ *
+ * sehingga browser mengaksesnya melalui:
+ *
+ * /sounds/notification.mp3
+ */
+const notificationSound = new Audio(
+    "/sounds/notification.mp3",
+);
+
+notificationSound.preload = "auto";
+
+/*
+|--------------------------------------------------------------------------
+| ANNOUNCEMENT STATE
+|--------------------------------------------------------------------------
+*/
+
 const lastAnnouncementKey = ref(
-    props.latestCall ? createAnnouncementKey(props.latestCall) : null,
+    props.latestCall
+        ? createAnnouncementKey(props.latestCall)
+        : null,
 );
 
 let pollingInterval = null;
 
 /*
+ * Mencegah dua pemanggilan
+ * berjalan bersamaan.
+ */
+let announcementQueue = [];
+
+let isAnnouncementPlaying = false;
+
+/*
 |--------------------------------------------------------------------------
-| Helpers
+| ANNOUNCEMENT KEY
 |--------------------------------------------------------------------------
 */
 
-/**
- * Membuat identifier unik untuk setiap pemanggilan.
- *
- * Kenapa tidak hanya menggunakan queue ID?
- *
- * Karena:
- *
- * A006 CALL  -> id 20
- * A006 RECALL -> id 20
- *
- * ID sama.
- *
- * Tetapi called_at berubah.
- *
- * Jadi kita gunakan:
- *
- * queue_id + called_at
- */
 function createAnnouncementKey(call) {
     if (!call) {
         return null;
@@ -80,9 +95,12 @@ function createAnnouncementKey(call) {
     return `${call.id}-${call.called_at}`;
 }
 
-/**
- * Mengubah angka menjadi bahasa Indonesia.
- */
+/*
+|--------------------------------------------------------------------------
+| NUMBER TO INDONESIAN
+|--------------------------------------------------------------------------
+*/
+
 function numberToIndonesian(number) {
     const numbers = [
         "nol",
@@ -103,362 +121,614 @@ function numberToIndonesian(number) {
         .join(" ");
 }
 
-/**
- * Mengubah nomor antrian menjadi format
- * yang lebih mudah dibaca oleh TTS.
- *
- * Contoh:
- *
- * A006
- * ↓
- * A nol nol enam
- */
+/*
+|--------------------------------------------------------------------------
+| FORMAT QUEUE NUMBER
+|--------------------------------------------------------------------------
+*/
+
 function formatQueueNumber(queueNumber) {
     if (!queueNumber) {
         return "";
     }
 
-    const prefix = queueNumber.match(/^[A-Za-z]+/)?.[0] ?? "";
+    const prefix =
+        queueNumber.match(/^[A-Za-z]+/)?.[0] ?? "";
 
-    const number = queueNumber.match(/\d+$/)?.[0] ?? "";
+    const number =
+        queueNumber.match(/\d+$/)?.[0] ?? "";
 
-    const prefixText = prefix.toUpperCase().split("").join(" ");
+    const prefixText = prefix
+        .toUpperCase()
+        .split("")
+        .join(", ");
 
-    const numberText = numberToIndonesian(number);
+    const numberText = number
+        .split("")
+        .map((digit) => {
+            const numbers = [
+                "nol",
+                "satu",
+                "dua",
+                "tiga",
+                "empat",
+                "lima",
+                "enam",
+                "tujuh",
+                "delapan",
+                "sembilan",
+            ];
 
-    return `${prefixText} ${numberText}`;
+            return numbers[Number(digit)];
+        })
+        .join(", ");
+
+    return `${prefixText}, ${numberText}`;
 }
 
-/**
- * Mengubah kode loket menjadi suara.
- *
- * T1
- * ↓
- * satu
- *
- * CS2
- * ↓
- * dua
- */
+/*
+|--------------------------------------------------------------------------
+| FORMAT COUNTER NUMBER
+|--------------------------------------------------------------------------
+*/
+
 function formatCounterNumber(counterCode) {
     if (!counterCode) {
         return "";
     }
 
-    const number = counterCode.match(/\d+$/)?.[0] ?? "";
+    const number =
+        counterCode.match(/\d+$/)?.[0] ?? "";
 
-    return numberToIndonesian(number);
-}
+    return number
+        .split("")
+        .map((digit) => {
+            const numbers = [
+                "nol",
+                "satu",
+                "dua",
+                "tiga",
+                "empat",
+                "lima",
+                "enam",
+                "tujuh",
+                "delapan",
+                "sembilan",
+            ];
 
-/**
- * Membuat kalimat pemanggilan.
- */
-function createAnnouncementText(call) {
-    const queueNumber = formatQueueNumber(call.queue_number);
-
-    const counterNumber = formatCounterNumber(call.counter);
-
-    return `Nomor antrian, ${queueNumber}, silakan menuju loket ${counterNumber}.`;
+            return numbers[Number(digit)];
+        })
+        .join(", ");
 }
 
 /*
 |--------------------------------------------------------------------------
-| Text To Speech
+| ANNOUNCEMENT TEXT
+|--------------------------------------------------------------------------
+*/
+
+function createAnnouncementText(call) {
+    const queueNumber =
+        formatQueueNumber(call.queue_number);
+
+    const counterNumber =
+        formatCounterNumber(call.counter);
+
+    return `Nomor antrian, ${queueNumber}. Silakan menuju loket ${counterNumber}.`;
+}
+
+/*
+|--------------------------------------------------------------------------
+| PLAY NOTIFICATION SOUND
+|--------------------------------------------------------------------------
+|
+| Urutan:
+|
+| notification.mp3
+|       ↓
+| selesai
+|       ↓
+| TTS
+|
+*/
+
+function playNotificationSound() {
+    return new Promise((resolve) => {
+        /*
+         * Pastikan audio berhenti
+         * dari pemanggilan sebelumnya.
+         */
+        notificationSound.pause();
+
+        notificationSound.currentTime = 0;
+
+        /*
+         * Ketika audio selesai,
+         * lanjut ke TTS.
+         */
+        const handleEnded = () => {
+            cleanup();
+
+            resolve();
+        };
+
+        /*
+         * Kalau audio error,
+         * jangan sampai TTS ikut macet.
+         */
+        const handleError = () => {
+            console.warn(
+                "Gagal memainkan suara notifikasi.",
+            );
+
+            cleanup();
+
+            resolve();
+        };
+
+        const cleanup = () => {
+            notificationSound.removeEventListener(
+                "ended",
+                handleEnded,
+            );
+
+            notificationSound.removeEventListener(
+                "error",
+                handleError,
+            );
+        };
+
+        notificationSound.addEventListener(
+            "ended",
+            handleEnded,
+        );
+
+        notificationSound.addEventListener(
+            "error",
+            handleError,
+        );
+
+        const playPromise =
+            notificationSound.play();
+
+        /*
+         * Browser dapat menolak audio
+         * apabila belum ada user interaction.
+         */
+        if (playPromise !== undefined) {
+            playPromise.catch((error) => {
+                console.warn(
+                    "Audio notification diblokir browser:",
+                    error,
+                );
+
+                cleanup();
+
+                resolve();
+            });
+        }
+    });
+}
+
+/*
+|--------------------------------------------------------------------------
+| SPEECH
 |--------------------------------------------------------------------------
 */
 
 function speakQueue(call) {
+    return new Promise((resolve) => {
+        if (!call) {
+            resolve();
+
+            return;
+        }
+
+        if (
+            !("speechSynthesis" in window)
+        ) {
+            console.warn(
+                "Browser tidak mendukung Speech Synthesis.",
+            );
+
+            resolve();
+
+            return;
+        }
+
+        if (!voiceEnabled.value) {
+            resolve();
+
+            return;
+        }
+
+        /*
+         * Hentikan speech sebelumnya.
+         */
+        window.speechSynthesis.cancel();
+
+        const text =
+            createAnnouncementText(call);
+
+        const utterance =
+            new SpeechSynthesisUtterance(
+                text,
+            );
+
+        utterance.lang = "id-ID";
+
+        /*
+         * Sedikit diperlambat agar
+         * nomor lebih jelas.
+         */
+        utterance.rate = 0.85;
+
+        utterance.pitch = 1;
+
+        utterance.volume = 1;
+
+        utterance.onstart = () => {
+            isSpeaking.value = true;
+        };
+
+        utterance.onend = () => {
+            isSpeaking.value = false;
+
+            resolve();
+        };
+
+        utterance.onerror = () => {
+            isSpeaking.value = false;
+
+            resolve();
+        };
+
+        window.speechSynthesis.speak(
+            utterance,
+        );
+    });
+}
+
+/*
+|--------------------------------------------------------------------------
+| PLAY ANNOUNCEMENT
+|--------------------------------------------------------------------------
+|
+| Satu pemanggilan:
+|
+| DING DING DING
+|       ↓
+| TTS
+|
+*/
+
+async function playAnnouncement(call) {
     if (!call) {
         return;
     }
 
     /*
-     * Browser tidak mendukung Speech Synthesis.
-     */
-    if (!("speechSynthesis" in window)) {
-        console.warn("Browser tidak mendukung Speech Synthesis.");
-
-        return;
-    }
-
-    /*
-     * Suara belum diaktifkan oleh user.
+     * Kalau suara belum diaktifkan,
+     * jangan memainkan apapun.
      */
     if (!voiceEnabled.value) {
         return;
     }
 
     /*
-     * Hentikan suara sebelumnya jika masih berjalan.
+     * Pastikan hanya satu announcement
+     * berjalan dalam satu waktu.
      */
-    window.speechSynthesis.cancel();
+    announcementQueue.push(call);
 
-    const text = createAnnouncementText(call);
+    if (isAnnouncementPlaying) {
+        return;
+    }
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    isAnnouncementPlaying = true;
 
-    /*
-     * Bahasa Indonesia.
-     */
-    utterance.lang = "id-ID";
+    while (announcementQueue.length > 0) {
+        const currentCall =
+            announcementQueue.shift();
 
-    /*
-     * Kecepatan suara.
-     *
-     * 1 = normal
-     *
-     * Sedikit diperlambat supaya nomor
-     * lebih mudah didengar.
-     */
-    utterance.rate = 0.85;
+        /*
+         * 1. DING DING DING
+         */
+        await playNotificationSound();
 
-    /*
-     * Tinggi rendah suara.
-     */
-    utterance.pitch = 1;
+        /*
+         * 2. TTS
+         */
+        await speakQueue(currentCall);
+    }
 
-    /*
-     * Volume.
-     */
-    utterance.volume = 1;
-
-    utterance.onstart = () => {
-        isSpeaking.value = true;
-    };
-
-    utterance.onend = () => {
-        isSpeaking.value = false;
-    };
-
-    utterance.onerror = () => {
-        isSpeaking.value = false;
-    };
-
-    window.speechSynthesis.speak(utterance);
+    isAnnouncementPlaying = false;
 }
 
 /*
 |--------------------------------------------------------------------------
-| Aktifkan Suara
+| ENABLE VOICE
 |--------------------------------------------------------------------------
 */
 
 function enableVoice() {
-    if (!("speechSynthesis" in window)) {
-        alert("Browser Anda tidak mendukung fitur suara.");
+    if (
+        !("speechSynthesis" in window)
+    ) {
+        alert(
+            "Browser Anda tidak mendukung fitur suara.",
+        );
 
         return;
     }
 
-    /*
-     * Tandai suara telah diaktifkan.
-     */
     voiceEnabled.value = true;
 
     /*
-     * Kita lakukan speech kecil untuk membuka
-     * izin audio browser.
-     *
-     * Kalimat ini sengaja pendek.
+     * Reset audio.
      */
-    const utterance = new SpeechSynthesisUtterance("Suara monitor aktif.");
+    notificationSound.pause();
+
+    notificationSound.currentTime = 0;
+
+    /*
+     * Suara pembuka.
+     */
+    const utterance =
+        new SpeechSynthesisUtterance(
+            "Suara monitor aktif.",
+        );
 
     utterance.lang = "id-ID";
+
     utterance.rate = 0.9;
+
     utterance.volume = 1;
 
     window.speechSynthesis.cancel();
 
-    window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.speak(
+        utterance,
+    );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Polling Monitor
+| MONITOR POLLING
 |--------------------------------------------------------------------------
 */
 
-/**
- * Mengambil data Monitor terbaru.
- *
- * Untuk tahap pertama kita gunakan polling.
- *
- * Jadi:
- *
- * Monitor
- * ↓
- * setiap 1.5 detik
- * ↓
- * /monitor/data
- */
 async function fetchMonitorData() {
     try {
-        const response = await fetch(route("monitor.data"), {
-            method: "GET",
+        const response = await fetch(
+            route("monitor.data"),
+            {
+                method: "GET",
 
-            headers: {
-                Accept: "application/json",
+                headers: {
+                    Accept:
+                        "application/json",
+                },
+
+                cache: "no-store",
             },
-
-            cache: "no-store",
-        });
+        );
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(
+                `HTTP ${response.status}`,
+            );
         }
 
-        const data = await response.json();
+        const data =
+            await response.json();
 
         /*
-         * Update data counter.
+         * COUNTERS
          */
-        counters.value = data.counters ?? [];
+        counters.value =
+            data.counters ?? [];
 
         /*
-         * Update antrian waiting.
+         * WAITING QUEUES
          */
-        waitingQueues.value = data.waitingQueues ?? {};
+        waitingQueues.value =
+            data.waitingQueues ?? {};
 
         /*
-         * Update latest call.
+         * LATEST CALL
          */
-        const newLatestCall = data.latestCall ?? null;
+        const newLatestCall =
+            data.latestCall ?? null;
 
-        latestCall.value = newLatestCall;
+        latestCall.value =
+            newLatestCall;
 
         /*
-         * Cek apakah ada pemanggilan baru.
+         * CEK PEMANGGILAN BARU
          */
         if (newLatestCall) {
-            const newKey = createAnnouncementKey(newLatestCall);
+            const newKey =
+                createAnnouncementKey(
+                    newLatestCall,
+                );
 
             /*
-             * Kalau key berbeda berarti:
+             * Key berubah berarti:
              *
              * CALL baru
              * atau
              * RECALL
              */
-            if (newKey && newKey !== lastAnnouncementKey.value) {
-                lastAnnouncementKey.value = newKey;
+            if (
+                newKey &&
+                newKey !==
+                    lastAnnouncementKey.value
+            ) {
+                lastAnnouncementKey.value =
+                    newKey;
 
                 /*
-                 * Mainkan suara.
+                 * Masukkan ke queue
+                 * announcement.
                  */
-                speakQueue(newLatestCall);
+                playAnnouncement(
+                    newLatestCall,
+                );
             }
         }
     } catch (error) {
-        console.error("Gagal mengambil data monitor:", error);
+        console.error(
+            "Gagal mengambil data monitor:",
+            error,
+        );
     }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Computed
+| WAITING QUEUES
 |--------------------------------------------------------------------------
 */
 
 const totalWaiting = computed(() =>
-    Object.values(waitingQueues.value).reduce(
-        (total, queues) => total + queues.length,
+    Object.values(
+        waitingQueues.value,
+    ).reduce(
+        (total, queues) =>
+            total + queues.length,
         0,
     ),
 );
 
-const serviceColor = (service) => {
-    switch (service) {
-        case "Teller":
-            return "blue";
+const tellerQueues = computed(() => {
+    return (
+        waitingQueues.value[
+            "Teller"
+        ] ?? []
+    );
+});
 
-        case "Customer Service":
-            return "emerald";
+const customerServiceQueues =
+    computed(() => {
+        return (
+            waitingQueues.value[
+                "Customer Service"
+            ] ?? []
+        );
+    });
 
-        default:
-            return "amber";
-    }
-};
+/*
+|--------------------------------------------------------------------------
+| COUNTER STATUS
+|--------------------------------------------------------------------------
+*/
 
 const counterStatus = (counter) => {
-    if (!counter.queues?.length) {
-        return "offline";
-    }
+    switch (counter.status) {
+        case "AVAILABLE":
+            return "available";
 
-    switch (counter.queues[0].status) {
         case "CALLED":
             return "called";
 
         case "SERVING":
             return "processing";
 
+        case "INACTIVE":
         default:
-            return "waiting";
+            return "offline";
     }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Lifecycle
+| LIFECYCLE
 |--------------------------------------------------------------------------
 */
 
 onMounted(() => {
     /*
      * Fullscreen.
-     *
-     * Browser mungkin menolak request ini
-     * karena fullscreen juga membutuhkan
-     * user interaction.
-     *
-     * Jadi kita tangkap error-nya supaya
-     * tidak mengganggu monitor.
      */
-    document.documentElement.requestFullscreen?.()?.catch?.(() => {});
+    document.documentElement
+        .requestFullscreen?.()
+        ?.catch?.(() => {});
 
     /*
-     * Poll pertama.
+     * Fetch pertama.
      */
     fetchMonitorData();
 
     /*
-     * Poll setiap 1.5 detik.
+     * Polling setiap 1.5 detik.
      */
-    pollingInterval = setInterval(fetchMonitorData, 1500);
+    pollingInterval =
+        setInterval(
+            fetchMonitorData,
+            1500,
+        );
 });
 
 onUnmounted(() => {
     /*
-     * Hentikan polling.
+     * Stop polling.
      */
     if (pollingInterval) {
-        clearInterval(pollingInterval);
+        clearInterval(
+            pollingInterval,
+        );
+
+        pollingInterval = null;
     }
 
     /*
-     * Hentikan suara jika halaman ditutup.
+     * Stop audio notification.
      */
-    if ("speechSynthesis" in window) {
+    notificationSound.pause();
+
+    notificationSound.currentTime = 0;
+
+    /*
+     * Stop TTS.
+     */
+    if (
+        "speechSynthesis" in window
+    ) {
         window.speechSynthesis.cancel();
     }
+
+    /*
+     * Bersihkan queue announcement.
+     */
+    announcementQueue = [];
+
+    isAnnouncementPlaying = false;
 });
 </script>
 
 <template>
     <Head title="Monitor" />
 
-    <div class="flex h-screen flex-col overflow-hidden bg-slate-100">
+    <div
+        class="flex h-screen flex-col overflow-hidden bg-slate-100"
+    >
+        <!-- =========================================================
+             NAVBAR
+        ========================================================== -->
+
         <MonitorNavbar />
 
-        <!--
-        |--------------------------------------------------------------------------
-        | Voice Control
-        |--------------------------------------------------------------------------
-        -->
+        <!-- =========================================================
+             VOICE CONTROL
+        ========================================================== -->
 
         <div
             class="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-2"
         >
-            <div class="flex items-center gap-3">
+            <div
+                class="flex items-center gap-3"
+            >
                 <div
                     :class="
                         voiceEnabled
@@ -467,9 +737,15 @@ onUnmounted(() => {
                     "
                     class="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold"
                 >
-                    <span class="h-2.5 w-2.5 rounded-full bg-current"></span>
+                    <span
+                        class="h-2.5 w-2.5 rounded-full bg-current"
+                    ></span>
 
-                    {{ voiceEnabled ? "Suara Aktif" : "Suara Belum Aktif" }}
+                    {{
+                        voiceEnabled
+                            ? "Suara Aktif"
+                            : "Suara Belum Aktif"
+                    }}
                 </div>
 
                 <span
@@ -489,17 +765,26 @@ onUnmounted(() => {
                 🔊 Aktifkan Suara
             </button>
 
-            <span v-else class="text-xs text-slate-400">
+            <span
+                v-else
+                class="text-xs text-slate-400"
+            >
                 Sistem suara siap digunakan
             </span>
         </div>
 
-        <main
-            class="grid flex-1 grid-rows-[auto_240px_minmax(0,1fr)] gap-4 overflow-hidden p-4"
-        >
-            <!-- Header -->
+        <!-- =========================================================
+             MAIN
+        ========================================================== -->
 
-            <div class="flex items-center justify-between">
+        <main
+            class="grid min-h-0 flex-1 grid-rows-[auto_240px_minmax(0,1fr)] gap-4 overflow-hidden p-4"
+        >
+            <!-- HEADER -->
+
+            <div
+                class="flex items-center justify-between"
+            >
                 <h2
                     class="text-2xl font-semibold tracking-tight text-slate-800"
                 >
@@ -514,26 +799,52 @@ onUnmounted(() => {
                 </span>
             </div>
 
-            <!-- Counter -->
+            <!-- COUNTERS -->
 
-            <div class="grid grid-cols-5 gap-5">
+            <div
+                class="grid min-h-0 grid-cols-5 gap-5"
+            >
                 <CounterCard
                     v-for="counter in counters"
                     :key="counter.id"
                     :counter="counter.name"
-                    :queue="counter.queues[0]?.queue_number"
-                    :service="counter.service?.name"
-                    :status="counterStatus(counter)"
+                    :queue="
+                        counter.queue
+                            ?.queue_number
+                    "
+                    :service="
+                        counter.service
+                            ?.name
+                    "
+                    :status="
+                        counterStatus(
+                            counter,
+                        )
+                    "
+                    :online-staff-count="
+                        counter.online_staff_count
+                    "
+                    :staff-count="
+                        counter.staff_count
+                    "
                 />
             </div>
 
-            <!-- Waiting -->
+            <!-- =====================================================
+                 WAITING QUEUES
+            ====================================================== -->
 
             <div
-                class="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
             >
-                <div class="mb-5 flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-slate-800">
+                <!-- HEADER -->
+
+                <div
+                    class="mb-5 flex shrink-0 items-center justify-between"
+                >
+                    <h2
+                        class="text-lg font-semibold text-slate-800"
+                    >
                         ANTRIAN MENUNGGU
                     </h2>
 
@@ -546,17 +857,43 @@ onUnmounted(() => {
                     </span>
                 </div>
 
-                <div class="grid min-h-0 flex-1 grid-cols-3 gap-5">
+                <!-- TELLER + CUSTOMER SERVICE -->
+
+                <div
+                    class="grid min-h-0 flex-1 grid-cols-1 gap-5 md:grid-cols-2"
+                >
+                    <!-- TELLER -->
+
                     <WaitingColumn
-                        v-for="(queues, service) in waitingQueues"
-                        :key="service"
-                        :title="service.toUpperCase()"
-                        :color="serviceColor(service)"
-                        :queues="queues.map((queue) => queue.queue_number)"
+                        title="TELLER"
+                        color="blue"
+                        :queues="
+                            tellerQueues.map(
+                                (queue) =>
+                                    queue.queue_number,
+                            )
+                        "
+                    />
+
+                    <!-- CUSTOMER SERVICE -->
+
+                    <WaitingColumn
+                        title="CUSTOMER SERVICE"
+                        color="emerald"
+                        :queues="
+                            customerServiceQueues.map(
+                                (queue) =>
+                                    queue.queue_number,
+                            )
+                        "
                     />
                 </div>
             </div>
         </main>
+
+        <!-- =========================================================
+             FOOTER
+        ========================================================== -->
 
         <footer
             class="relative h-10 shrink-0 overflow-hidden bg-indigo-700 text-white"
@@ -564,41 +901,65 @@ onUnmounted(() => {
             <div
                 class="ticker absolute flex h-full items-center whitespace-nowrap text-sm font-medium"
             >
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Selamat Datang di Sistem Antrian Bank
                 </span>
 
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Harap memperhatikan nomor antrian yang sedang dipanggil
                 </span>
 
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Siapkan dokumen sebelum menuju loket
                 </span>
 
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Nasabah Prioritas akan dilayani sesuai ketentuan bank
                 </span>
 
-                <span class="mx-16"> Terima kasih atas kunjungan Anda </span>
+                <span
+                    class="mx-16"
+                >
+                    Terima kasih atas kunjungan Anda
+                </span>
 
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Selamat Datang di Sistem Antrian Bank
                 </span>
 
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Harap memperhatikan nomor antrian yang sedang dipanggil
                 </span>
 
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Siapkan dokumen sebelum menuju loket
                 </span>
 
-                <span class="mx-16">
+                <span
+                    class="mx-16"
+                >
                     Nasabah Prioritas akan dilayani sesuai ketentuan bank
                 </span>
 
-                <span class="mx-16"> Terima kasih atas kunjungan Anda </span>
+                <span
+                    class="mx-16"
+                >
+                    Terima kasih atas kunjungan Anda
+                </span>
             </div>
         </footer>
     </div>
