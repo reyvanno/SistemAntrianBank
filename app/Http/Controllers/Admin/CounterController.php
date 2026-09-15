@@ -6,14 +6,15 @@ use Illuminate\Routing\Controller as BaseController;
 use App\Http\Requests\Admin\StoreCounterRequest;
 use App\Http\Requests\Admin\UpdateCounterRequest;
 use App\Models\Counter;
-use App\Models\Service;
 use App\Services\CounterService;
+use App\Services\ServiceService;
 use Illuminate\Database\QueryException;
 
 class CounterController extends BaseController
 {
     public function __construct(
-        protected CounterService $counterService
+        protected CounterService $counterService,
+        protected ServiceService $serviceService
     ) {
         $this->middleware('permission:counter.view')
             ->only('index');
@@ -44,7 +45,7 @@ class CounterController extends BaseController
     public function create()
     {
         return inertia('Admin/Counters/Create', [
-            'services' => Service::orderBy('name')->get(),
+            'services' => $this->serviceService->all(),
         ]);
     }
 
@@ -63,7 +64,7 @@ class CounterController extends BaseController
     {
         return inertia('Admin/Counters/Edit', [
             'counter' => $counter,
-            'services' => Service::orderBy('name')->get(),
+            'services' => $this->serviceService->all(),
         ]);
     }
 

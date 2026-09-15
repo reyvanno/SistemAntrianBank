@@ -4,18 +4,20 @@ namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\StoreQueueRequest;
-use App\Models\Service;
 use App\Models\Queue;
+use App\Models\Service;
 use App\Services\QueueService;
-use Illuminate\Http\RedirectResponse;
+use App\Services\ServiceService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class QueueController extends Controller
 {
     public function __construct(
-        protected QueueService $queueService
+        protected QueueService $queueService,
+        protected ServiceService $serviceService
     ) {
     }
 
@@ -27,18 +29,9 @@ class QueueController extends Controller
 
     public function create(): Response
     {
-        return Inertia::render(
-            'Customer/Queue/Index',
-            [
-                'services' => Service::query()
-                    ->orderBy('code')
-                    ->get([
-                        'id',
-                        'code',
-                        'name',
-                    ]),
-            ]
-        );
+        return Inertia::render('Customer/Queue/Index', [
+            'services' => $this->serviceService->all(),
+        ]);
     }
 
     /*
@@ -52,16 +45,13 @@ class QueueController extends Controller
     ): RedirectResponse {
         /*
          * Queue dibuat melalui QueueService.
-         *
-         * created_at akan mengikuti timezone
-         * aplikasi Laravel, yaitu Asia/Jakarta.
          */
         $queue = $this->queueService->create(
             $request->validated()
         );
 
         /*
-         * Kirim data queue ke halaman customer
+         * Kirim hasil queue ke halaman customer
          * melalui flash session.
          */
         return redirect()
@@ -87,16 +77,6 @@ class QueueController extends Controller
                     'status' =>
                         $queue->status,
 
-                    /*
-                     * Waktu pengambilan nomor.
-                     *
-                     * Karena APP_TIMEZONE sudah:
-                     *
-                     * Asia/Jakarta
-                     *
-                     * maka created_at akan diformat
-                     * sesuai waktu Indonesia Barat.
-                     */
                     'created_at' =>
                         $queue->created_at
                                 ?->timezone('Asia/Jakarta')
@@ -104,6 +84,12 @@ class QueueController extends Controller
                 ]
             );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PDF
+    |--------------------------------------------------------------------------
+    */
 
     public function pdf(int $queue)
     {

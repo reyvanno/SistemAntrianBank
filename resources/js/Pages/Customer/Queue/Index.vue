@@ -3,7 +3,7 @@ import GuestLayout from "@/Layouts/GuestLayout.vue";
 
 import { Head, useForm, usePage } from "@inertiajs/vue3";
 
-import { computed, ref } from "vue";
+import { computed } from "vue";
 
 import {
     BuildingOffice2Icon,
@@ -11,7 +11,6 @@ import {
     ClockIcon,
     TicketIcon,
     ArrowPathIcon,
-    ArrowDownTrayIcon,
 } from "@heroicons/vue/24/outline";
 
 /*
@@ -66,9 +65,89 @@ const form = useForm({
 
 const selectedService = computed(() => {
     return props.services.find(
-        (service) => String(service.id) === String(form.service_id),
+        (service) =>
+            String(service.id) === String(form.service_id)
     );
 });
+
+/*
+|--------------------------------------------------------------------------
+| DOWNLOAD PDF
+|--------------------------------------------------------------------------
+|
+| PDF akan otomatis di-download setelah nomor antrian
+| berhasil dibuat.
+|
+*/
+
+const downloadPdf = async (queueId, queueNumber) => {
+    if (!queueId) {
+        return;
+    }
+
+    try {
+        /*
+         * Request PDF ke Laravel.
+         */
+        const response = await fetch(
+            route("customer.queue.pdf", queueId),
+            {
+                method: "GET",
+                credentials: "same-origin",
+            }
+        );
+
+        /*
+         * Pastikan response berhasil.
+         */
+        if (!response.ok) {
+            throw new Error(
+                `Gagal mengunduh tiket PDF. Status: ${response.status}`
+            );
+        }
+
+        /*
+         * Ubah response menjadi Blob.
+         */
+        const blob = await response.blob();
+
+        /*
+         * Buat URL sementara dari Blob.
+         */
+        const blobUrl = window.URL.createObjectURL(blob);
+
+        /*
+         * Buat element <a> sementara.
+         */
+        const link = document.createElement("a");
+
+        link.href = blobUrl;
+
+        link.download = `tiket-antrian-${queueNumber}.pdf`;
+
+        document.body.appendChild(link);
+
+        /*
+         * Trigger download otomatis.
+         */
+        link.click();
+
+        /*
+         * Bersihkan element.
+         */
+        link.remove();
+
+        /*
+         * Bersihkan URL Blob.
+         */
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+        console.error(
+            "Gagal mengunduh tiket PDF:",
+            error
+        );
+    }
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -85,31 +164,35 @@ const submit = () => {
         preserveScroll: true,
 
         /*
-         * Jangan reset form terlalu cepat
-         * sebelum response Inertia selesai.
+         * Setelah queue berhasil dibuat,
+         * flash queue sudah tersedia di page props.
          */
         onSuccess: () => {
             /*
-             * Queue hasil pembuatan akan
-             * otomatis masuk ke:
+             * Simpan hasil queue terlebih dahulu.
              *
-             * page.props.flash.queue
-             *
-             * sehingga computed `queue`
-             * akan berubah secara reactive.
+             * Karena `queue` adalah computed dari
+             * page.props.flash.queue, pada saat
+             * onSuccess dijalankan datanya sudah tersedia.
              */
+            const generatedQueue = page.props.flash?.queue;
 
+            /*
+             * Reset form.
+             */
             form.reset();
+
+            /*
+             * Download PDF otomatis.
+             */
+            if (generatedQueue?.id) {
+                downloadPdf(
+                    generatedQueue.id,
+                    generatedQueue.queue_number
+                );
+            }
         },
     });
-};
-
-const downloadPdf = () => {
-    if (!queue.value?.id) {
-        return;
-    }
-
-    window.location.href = route("customer.queue.pdf", queue.value.id);
 };
 </script>
 
@@ -126,22 +209,29 @@ const downloadPdf = () => {
                 <div
                     class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50"
                 >
-                    <TicketIcon class="h-9 w-9 text-indigo-600" />
+                    <TicketIcon
+                        class="h-9 w-9 text-indigo-600"
+                    />
                 </div>
 
-                <h1 class="text-3xl font-bold text-slate-800">
+                <h1
+                    class="text-3xl font-bold text-slate-800"
+                >
                     Ambil Nomor Antrian
                 </h1>
 
                 <p
                     class="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500"
                 >
-                    Pilih layanan yang ingin Anda gunakan, kemudian ambil nomor
-                    antrian secara online.
+                    Pilih layanan yang ingin Anda gunakan,
+                    kemudian ambil nomor antrian secara online.
                 </p>
             </div>
 
-            <!-- RESULT -->
+            <!-- =====================================================
+                 RESULT
+            ====================================================== -->
+
             <div
                 v-if="queue"
                 class="mb-8 overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm"
@@ -157,18 +247,25 @@ const downloadPdf = () => {
                         />
 
                         <div>
-                            <h2 class="font-bold text-emerald-800">
+                            <h2
+                                class="font-bold text-emerald-800"
+                            >
                                 Nomor Antrian Berhasil Dibuat
                             </h2>
 
-                            <p class="mt-0.5 text-sm text-emerald-600">
-                                Silakan tunggu sampai nomor Anda dipanggil.
+                            <p
+                                class="mt-0.5 text-sm text-emerald-600"
+                            >
+                                Silakan tunggu sampai nomor
+                                Anda dipanggil.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <!-- TICKET -->
+                <!-- =================================================
+                     TICKET
+                ================================================== -->
 
                 <div class="p-8 text-center">
                     <p
@@ -191,7 +288,9 @@ const downloadPdf = () => {
                         <div
                             class="flex items-center justify-center gap-2 text-slate-600"
                         >
-                            <BuildingOffice2Icon class="h-5 w-5" />
+                            <BuildingOffice2Icon
+                                class="h-5 w-5"
+                            />
 
                             <span class="font-semibold">
                                 {{ queue.service }}
@@ -203,7 +302,9 @@ const downloadPdf = () => {
                         <div
                             class="mt-3 flex items-center justify-center gap-2 text-sm text-slate-500"
                         >
-                            <ClockIcon class="h-4 w-4" />
+                            <ClockIcon
+                                class="h-4 w-4"
+                            />
 
                             <span>
                                 Diambil pukul
@@ -225,20 +326,6 @@ const downloadPdf = () => {
                             Menunggu
                         </span>
                     </div>
-
-                    <!-- DOWNLOAD PDF -->
-
-                    <div class="mt-6 border-t border-slate-100 pt-6">
-                        <button
-                            type="button"
-                            @click="downloadPdf"
-                            class="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-100"
-                        >
-                            <ArrowDownTrayIcon class="h-5 w-5" />
-
-                            <span> Unduh Tiket PDF </span>
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -251,17 +338,26 @@ const downloadPdf = () => {
             >
                 <!-- FORM HEADER -->
 
-                <div class="border-b border-slate-200 px-6 py-5">
-                    <h2 class="text-lg font-bold text-slate-800">
+                <div
+                    class="border-b border-slate-200 px-6 py-5"
+                >
+                    <h2
+                        class="text-lg font-bold text-slate-800"
+                    >
                         Pilih Layanan
                     </h2>
 
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p
+                        class="mt-1 text-sm text-slate-500"
+                    >
                         Pilih layanan yang ingin Anda gunakan.
                     </p>
                 </div>
 
-                <form class="p-6" @submit.prevent="submit">
+                <form
+                    class="p-6"
+                    @submit.prevent="submit"
+                >
                     <!-- =================================================
                          SERVICES
                     ================================================== -->
@@ -276,13 +372,18 @@ const downloadPdf = () => {
                             type="button"
                             class="group rounded-xl border p-5 text-left transition"
                             :class="
-                                String(form.service_id) === String(service.id)
+                                String(form.service_id) ===
+                                String(service.id)
                                     ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
                                     : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
                             "
-                            @click="form.service_id = service.id"
+                            @click="
+                                form.service_id = service.id
+                            "
                         >
-                            <div class="flex items-start justify-between gap-4">
+                            <div
+                                class="flex items-start justify-between gap-4"
+                            >
                                 <!-- ICON -->
 
                                 <div
@@ -294,7 +395,9 @@ const downloadPdf = () => {
                                             : 'bg-slate-100 text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600'
                                     "
                                 >
-                                    <BuildingOffice2Icon class="h-6 w-6" />
+                                    <BuildingOffice2Icon
+                                        class="h-6 w-6"
+                                    />
                                 </div>
 
                                 <!-- CHECK -->
@@ -321,7 +424,9 @@ const downloadPdf = () => {
                                     {{ service.code }}
                                 </p>
 
-                                <h3 class="mt-1 font-bold text-slate-800">
+                                <h3
+                                    class="mt-1 font-bold text-slate-800"
+                                >
                                     {{ service.name }}
                                 </h3>
                             </div>
@@ -336,7 +441,9 @@ const downloadPdf = () => {
                         v-else
                         class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-8 text-center"
                     >
-                        <p class="text-sm font-medium text-slate-600">
+                        <p
+                            class="text-sm font-medium text-slate-600"
+                        >
                             Belum ada layanan yang tersedia.
                         </p>
                     </div>
@@ -356,7 +463,9 @@ const downloadPdf = () => {
                          SUBMIT
                     ================================================== -->
 
-                    <div class="mt-8 border-t border-slate-100 pt-6">
+                    <div
+                        class="mt-8 border-t border-slate-100 pt-6"
+                    >
                         <button
                             type="submit"
                             :disabled="
@@ -371,7 +480,10 @@ const downloadPdf = () => {
                                 class="h-5 w-5 animate-spin"
                             />
 
-                            <TicketIcon v-else class="h-5 w-5" />
+                            <TicketIcon
+                                v-else
+                                class="h-5 w-5"
+                            />
 
                             <span>
                                 {{
@@ -390,7 +502,9 @@ const downloadPdf = () => {
                         >
                             Layanan dipilih:
 
-                            <span class="font-semibold text-slate-600">
+                            <span
+                                class="font-semibold text-slate-600"
+                            >
                                 {{ selectedService.name }}
                             </span>
                         </p>
@@ -405,9 +519,11 @@ const downloadPdf = () => {
             <div
                 class="mt-6 rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-4"
             >
-                <p class="text-center text-sm leading-6 text-indigo-700">
-                    Setelah mendapatkan nomor, silahkan menunggu hingga nomor
-                    Anda dipanggil oleh petugas.
+                <p
+                    class="text-center text-sm leading-6 text-indigo-700"
+                >
+                    Setelah mendapatkan nomor, silahkan menunggu
+                    hingga nomor Anda dipanggil oleh petugas.
                 </p>
             </div>
         </div>

@@ -16,6 +16,11 @@ return [
     */
 
     'default' => env('CACHE_STORE', 'database'),
+    
+    'master_data_ttl' => env(
+        'CACHE_MASTER_DATA_TTL',
+        21600
+    ),
 
     /*
     |--------------------------------------------------------------------------
